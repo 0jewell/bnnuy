@@ -34,6 +34,41 @@ export type create_badge_response = {
 	updated: string
 }
 
+export type list_badge_response = {
+	id: number,
+	name: string,
+	description: string,
+	display_name: string,
+	display_description: string,
+	enabled: boolean,
+	icon_image_id: number,
+	display_icon_image_id: number,
+	created: string,
+	updated: string,
+	statistics: {
+		past_day_awarded_count: number,
+		awarded_count: number,
+		win_rate_percentage: number
+	},
+	awarding_universe: {
+		id: number,
+		name: string,
+		root_place_id: number
+	}
+}
+
+export type list_badges_response = {
+	previous_page_cursor: string?,
+	next_page_cursor: string?,
+	data: { list_badge_response }
+}
+
+export type upload_image_response = {
+	target_id: number,
+	state: string,
+	upload_asset_id: number
+}
+
 local function create_badge(
     api_key: api_key,
     experience_id: asset_id,
@@ -71,6 +106,106 @@ local function create_badge(
     return serde.decode('json', response_body)
 end
 
+local function update_badge(
+    api_key: api_key,
+    badge_id: asset_id,
+    name: string,
+    description: string,
+    enabled: boolean
+): ()
+    api.request(
+        api_key,
+        `legacy-badges/v1/badges/{badge_id}`,
+        'PATCH',
+        'application/json',
+        serde.encode('json', {
+            name = name,
+            description = description,
+            enabled = enabled,
+        })
+    )
+end
+
+local function get_create_badge_free_quota(
+	api_key: api_key,
+	experience_id: asset_id
+)
+    local response_body = api.request(
+        api_key,
+        `legacy-badges/v1/universes/{experience_id}/free-badges-quota`,
+        'GET',
+        'application/json',
+        ''
+    )
+
+    return serde.decode('json', response_body)
+end
+
+local function list_badges(
+	api_key: api_key,
+	experience_id: asset_id,
+	page_cursor: string?
+)
+    local path = `legacy-badges/v1/universes/{experience_id}/badges`
+    if page_cursor then
+        path = path .. `?cursor={page_cursor}`
+    end
+
+    local response_body = api.request(api_key, path, 'GET', 'application/json', '')
+
+    return serde.decode('json', response_body)
+end
+
+local function get_all_badges(api_key: api_key, experience_id: asset_id)
+    local all_badges = {}
+    local page_cursor: string? = nil
+
+    while true do
+        local response = list_badges(api_key, experience_id, page_cursor)
+
+        for _, badge in response.data do
+            table.insert(all_badges, badge)
+        end
+
+        if not response.next_page_cursor then
+            break
+        end
+
+        page_cursor = response.next_page_cursor
+    end
+
+    return all_badges
+end
+
+local function update_badge_icon(
+    api_key: api_key,
+    badge_id: asset_id,
+    icon_file_path: string
+)
+    local file_content = fs.readFile(icon_file_path)
+
+    local boundary = '----LuneBoundary' .. tostring(os.time())
+    local parts = {}
+    form.add_form_file(parts, boundary, 'files', 'icon.png', 'image/png', file_content)
+
+    local body = form.build_multipart_body(parts, boundary)
+
+    local response_body = api.request(
+        api_key,
+        `legacy-publish/v1/badges/{badge_id}/icon`,
+        'POST',
+        `multipart/form-data; boundary={boundary}`,
+        body
+    )
+
+    return serde.decode('json', response_body)
+end
+
 return table.freeze {
-    create_badge = create_badge
+    create_badge = create_badge,
+    update_badge = update_badge,
+    get_create_badge_free_quota = get_create_badge_free_quota,
+    list_badges = list_badges,
+    get_all_badges = get_all_badges,
+    update_badge_icon = update_badge_icon,
 }
