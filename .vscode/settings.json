@@ -1,0 +1,13 @@
+{
+  "luau-lsp.sourcemap.rojoProjectFile": "default.project.json",
+  "luau-lsp.sourcemap.autogenerate": true,
+  "luau-lsp.platform.type": "standard",
+  "luau-lsp.fflags.sync": true,
+  "luau-lsp.sourcemap.enabled": true,
+  "luau-lsp.sourcemap.useVSCodeWatcher": true,
+
+  "luau-lsp.ignoreGlobs": [
+    "**/lune_packages/**",
+    "**/luau_packages/**"
+  ]
+}

@@ -1,0 +1,14 @@
+drafts
+.env
+
+# lock files
+*.lock
+
+# pesde
+.pesde
+
+luau_packages
+lune_packages
+
+# rojo
+sourcemap.json
