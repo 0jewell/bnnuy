@@ -2,9 +2,10 @@
 local serde = require('@lune/serde')
 local fs = require('@lune/fs')
 
-local api = require('@lib/api')
+local user = require('@lib/api/user')
+type cookie = user.cookie
+
 local form = require('@lib/api/form')
-type api_key = api.api_key
 
 -- this
 export type asset_id = number
@@ -61,27 +62,28 @@ export type create_game_pass_response = {
 }
 
 local function list_game_passes(
-    api_key: api_key,
+    cookie: cookie,
     experience_id: asset_id,
     page_cursor: string?
 ): list_game_passes_response
-    local path = `games/v1/games/{experience_id}/game-passes?limit=100`
+    local path = `game-passes/v1/universes/{experience_id}/game-passes/creator?limit=100`
     if page_cursor then
         path = path .. `&cursor={page_cursor}`
     end
 
-    local response_body = api.request(api_key, path, 'GET', 'application/json', '')
+    local response_body = user.request(cookie, path, 'GET', 'application/json', '')
 
     return serde.decode('json', response_body)
 end
 
 local function get_game_pass(
-    api_key: api_key,
+    cookie: cookie,
+    experience_id: asset_id,
     game_pass_id: asset_id
 ): get_game_pass_response
-    local response_body = api.request(
-        api_key,
-        `economy/v1/game-pass/{game_pass_id}/game-pass-product-info`,
+    local response_body = user.request(
+        cookie,
+        `game-passes/v1/universes/{experience_id}/game-passes/{game_pass_id}/creator`,
         'GET',
         'application/json',
         ''
@@ -97,17 +99,17 @@ local function get_game_pass(
 end
 
 local function get_all_game_passes(
-    api_key: api_key,
+    cookie: cookie,
     experience_id: asset_id
 ): { get_game_pass_response }
     local all_game_passes = {}
     local page_cursor: string? = nil
 
     while true do
-        local response = list_game_passes(api_key, experience_id, page_cursor)
+        local response = list_game_passes(cookie, experience_id, page_cursor)
 
         for _, game_pass in response.data do
-            local full_game_pass = get_game_pass(api_key, game_pass.id)
+            local full_game_pass = get_game_pass(cookie, experience_id, game_pass.id)
             table.insert(all_game_passes, full_game_pass)
         end
 
@@ -122,7 +124,7 @@ local function get_all_game_passes(
 end
 
 local function create_game_pass(
-    api_key: api_key,
+    cookie: cookie,
     experience_id: asset_id,
     name: string,
     description: string,
@@ -141,9 +143,9 @@ local function create_game_pass(
             content = file_content
         }
 
-    local response_body = api.request(
-        api_key,
-        'game-passes/v1/game-passes',
+    local response_body = user.request(
+        cookie,
+        `game-passes/v1/universes/{experience_id}/game-passes`,
         'POST',
         `multipart/form-data; boundary={body.boundary}`,
         body.multipart()
@@ -153,7 +155,8 @@ local function create_game_pass(
 end
 
 local function update_game_pass(
-    api_key: api_key,
+    cookie: cookie,
+    experience_id: asset_id,
     game_pass_id: asset_id,
     name: string,
     description: string,
@@ -161,7 +164,9 @@ local function update_game_pass(
     icon_file_path: string?
 ): get_game_pass_response
     local body = form()
-        .text('name', name).text('description', description).text('isForSale', if price then 'true' else 'false')
+        .text('name', name)
+        .text('description', description)
+        .text('isForSale', if price then 'true' else 'false')
 
     if price then
         body.text('price', tostring(price))
@@ -172,15 +177,15 @@ local function update_game_pass(
         body.part { name = 'file', file_name = 'icon.png', content_type = 'image/png', content = file_content }
     end
 
-    api.request(
-        api_key,
-        `game-passes/v1/game-passes/{game_pass_id}/details`,
-        'POST',
+    user.request(
+        cookie,
+        `game-passes/v1/universes/{experience_id}/game-passes/{game_pass_id}`,
+        'PATCH',
         `multipart/form-data; boundary={body.boundary}`,
         body.multipart()
     )
 
-    return get_game_pass(api_key, game_pass_id)
+    return get_game_pass(cookie, experience_id, game_pass_id)
 end
 
 return table.freeze {

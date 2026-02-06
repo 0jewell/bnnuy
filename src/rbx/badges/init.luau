@@ -6,7 +6,7 @@ local api = require('@lib/api')
 local form = require('@lib/api/form')
 type api_key = api.api_key
 
--- this
+-- types
 export type asset_id = number
 export type creator_type = number
 
@@ -68,6 +68,7 @@ export type upload_image_response = {
     uploadAssetId: number,
 }
 
+-- this
 local function create_badge(
     api_key: api_key,
     experience_id: asset_id,
@@ -197,6 +198,7 @@ local function update_badge_icon(
     return serde.decode('json', response_body)
 end
 
+-- end
 return table.freeze {
     create_badge = create_badge,
     update_badge = update_badge,

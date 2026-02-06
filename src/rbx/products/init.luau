@@ -2,9 +2,10 @@
 local serde = require('@lune/serde')
 local fs = require('@lune/fs')
 
-local api = require('@lib/api')
+local user = require('@lib/api/user')
+type cookie = user.cookie
+
 local form = require('@lib/api/form')
-type api_key = api.api_key
 
 -- this
 export type asset_id = number
@@ -50,7 +51,7 @@ export type list_developer_products_response = {
 }
 
 local function create_developer_product_icon(
-    api_key: api_key,
+    cookie: cookie,
     developer_product_id: asset_id,
     icon_file_path: string
 ): create_developer_product_icon_response
@@ -59,8 +60,8 @@ local function create_developer_product_icon(
     local body =
         form().part { name = 'imageFile', file_name = 'icon.png', content_type = 'image/png', content = file_content }
 
-    local response_body = api.request(
-        api_key,
+    local response_body = user.request(
+        cookie,
         `developer-products/v1/developer-products/{developer_product_id}/image`,
         'POST',
         `multipart/form-data; boundary={body.boundary}`,
@@ -71,7 +72,7 @@ local function create_developer_product_icon(
 end
 
 local function create_developer_product(
-    api_key: api_key,
+    cookie: cookie,
     experience_id: asset_id,
     name: string,
     price: number,
@@ -80,32 +81,32 @@ local function create_developer_product(
     local path =
         `developer-products/v1/universes/{experience_id}/developerproducts?name={name}&priceInRobux={price}&description={description}`
 
-    local response_body = api.request(api_key, path, 'POST', 'application/json', '')
+    local response_body = user.request(cookie, path, 'POST', 'application/json', '')
 
     return serde.decode('json', response_body)
 end
 
 local function list_developer_products(
-    api_key: api_key,
+    cookie: cookie,
     experience_id: asset_id,
     page: number
 ): list_developer_products_response
     local path = `developer-products/v1/developer-products/list?universeId={experience_id}&page={page}`
 
-    local response_body = api.request(api_key, path, 'GET', 'application/json', '')
+    local response_body = user.request(cookie, path, 'GET', 'application/json', '')
 
     return serde.decode('json', response_body)
 end
 
 local function get_all_developer_products(
-    api_key: api_key,
+    cookie: cookie,
     experience_id: asset_id
 ): { list_developer_product_response_item }
     local all_products = {}
     local page = 1
 
     while true do
-        local response = list_developer_products(api_key, experience_id, page)
+        local response = list_developer_products(cookie, experience_id, page)
 
         for _, product in response.DeveloperProducts do
             table.insert(all_products, product)
@@ -122,11 +123,11 @@ local function get_all_developer_products(
 end
 
 local function get_developer_product(
-	api_key: api_key,
-	developer_product_id: asset_id
+    cookie: cookie,
+    developer_product_id: asset_id
 ): get_developer_product_response
-    local response_body = api.request(
-        api_key,
+    local response_body = user.request(
+        cookie,
         `developer-products/v1/developer-products/{developer_product_id}`,
         'GET',
         'application/json',
@@ -137,15 +138,15 @@ local function get_developer_product(
 end
 
 local function update_developer_product(
-    api_key: api_key,
+    cookie: cookie,
     experience_id: asset_id,
     product_id: asset_id,
     name: string,
     price: number,
     description: string
 ): ()
-    api.request(
-        api_key,
+    user.request(
+        cookie,
         `developer-products/v1/universes/{experience_id}/developerproducts/{product_id}/update`,
         'POST',
         'application/json',

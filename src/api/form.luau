@@ -1,4 +1,4 @@
--- this
+-- types
 export type part_settings = {
     name: string,
     file_name: string,
@@ -9,6 +9,7 @@ export type part_settings = {
 export type parts = { string }
 export type boundary = string
 
+-- this
 local function boundary()
     return `----boundary{tostring(os.time())}`
 end
