@@ -10,5 +10,8 @@ drafts
 luau_packages
 lune_packages
 
+# darklua / lune
+**/out/**
+
 # rojo
 sourcemap.json

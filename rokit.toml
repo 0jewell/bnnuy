@@ -2,3 +2,4 @@
 pesde = "daimond113/pesde@0.7.2+registry.0.2.3"
 rojo = 'rojo-rbx/rojo@7.6.1'
 lune = 'lune-org/lune@0.10.4'
+darklua = "seaofvoices/darklua@0.17.3"

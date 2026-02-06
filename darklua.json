@@ -1,0 +1,10 @@
+{
+    "bundle": {
+        "excludes": ["@lune/**"],
+
+        "require_mode": {
+            "name": "luau",
+            "use_luau_configuration": true
+        }
+    }
+}
