@@ -1,8 +1,8 @@
-name = '0jewell/publish'
+name = '0jewell/bnnuy'
 description = 'tool for publishing products'
 version = '0.1.0'
 authors = ['0jewell']
-repository = 'https://github.com/0jewell/publish'
+repository = 'https://github.com/0jewell/bnnuy'
 license = 'MIT'
 
 includes = ['src/*', 'pesde.toml']
