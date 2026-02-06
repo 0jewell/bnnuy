@@ -2,71 +2,70 @@
 local serde = require('@lune/serde')
 local fs = require('@lune/fs')
 
-local api = require('../api')
+local api = require('@lib/api')
+local form = require('@lib/api/form')
 type api_key = api.api_key
-
-local form = require('../form')
 
 -- this
 export type asset_id = number
 export type creator_type = number
 
 export type create_badge_response = {
-	id: number,
-	name: string,
-	description: string,
-	display_name: string,
-	display_description: string,
-	enabled: boolean,
-	icon_image_id: number,
-	display_icon_image_id: number,
-	awarder: {
-		id: number,
-		type: number,
-		name: string
-	},
-	statistics: {
-		past_day_awarded_count: number,
-		awarded_count: number,
-		win_rate_percentage: number
-	},
-	created: string,
-	updated: string
+    id: number,
+    name: string,
+    description: string,
+    displayName: string,
+    displayDescription: string,
+    enabled: boolean,
+    iconImageId: number,
+    displayIconImageId: number,
+    awarder: {
+        id: number,
+        type: number,
+        name: string,
+    },
+    statistics: {
+        pastDayAwardedCount: number,
+        awardedCount: number,
+        winRatePercentage: number,
+    },
+    created: string,
+    updated: string,
 }
 
 export type list_badge_response = {
-	id: number,
-	name: string,
-	description: string,
-	display_name: string,
-	display_description: string,
-	enabled: boolean,
-	icon_image_id: number,
-	display_icon_image_id: number,
-	created: string,
-	updated: string,
-	statistics: {
-		past_day_awarded_count: number,
-		awarded_count: number,
-		win_rate_percentage: number
-	},
-	awarding_universe: {
-		id: number,
-		name: string,
-		root_place_id: number
-	}
+    id: number,
+    name: string,
+    description: string,
+    displayName: string,
+    displayDescription: string,
+    enabled: boolean,
+    iconImageId: number,
+    displayIconImageId: number,
+    created: string,
+    updated: string,
+    statistics: {
+        pastDayAwardedCount: number,
+        awardedCount: number,
+        winRatePercentage: number,
+    },
+    awarding_universe: {
+        id: number,
+        name: string,
+        rootPlaceId: number,
+    },
 }
 
 export type list_badges_response = {
-	previous_page_cursor: string?,
-	next_page_cursor: string?,
-	data: { list_badge_response }
+    previousPageCursor: string?,
+    nextPageCursor: string?,
+    data: { list_badge_response },
 }
 
 export type upload_image_response = {
-	target_id: number,
-	state: string,
-	upload_asset_id: number
+    targetId: number,
+    state: string,
+    uploadAssetId: number,
 }
 
 local function create_badge(
@@ -80,27 +79,24 @@ local function create_badge(
     is_active: boolean?
 ): create_badge_response
     local file_content = fs.readFile(icon_file_path)
-    local boundary = '----LuneBoundary' .. tostring(os.time())
-    local parts = {}
 
-    form.add_form_file(parts, boundary, 'files', 'icon.png', 'image/png', file_content)
-    form.add_form_field(parts, boundary, 'name', name)
-    form.add_form_field(parts, boundary, 'description', description)
-    form.add_form_field(parts, boundary, 'paymentSourceType', tostring(payment_source_type))
-    form.add_form_field(parts, boundary, 'expectedCost', tostring(expected_cost))
+    local body = form()
+        .part { name = 'files', file_name = 'icon.png', content_type = 'image/png', content = file_content }
+        .text('name', name)
+        .text('description', description)
+        .text('paymentSourceType', tostring(payment_source_type))
+        .text('expectedCost', tostring(expected_cost))
 
     if is_active ~= nil then
-        form.add_form_field(parts, boundary, 'isActive', tostring(is_active))
+        body.text('isActive', tostring(is_active))
     end
-
-    local body = form.build_multipart_body(parts, boundary)
 
     local response_body = api.request(
         api_key,
         `legacy-badges/v1/universes/{experience_id}/badges`,
         'POST',
-        `multipart/form-data; boundary={boundary}`,
-        body
+        `multipart/form-data; boundary={body.boundary}`,
+        body.multipart()
     )
 
     return serde.decode('json', response_body)
@@ -127,8 +123,8 @@ local function update_badge(
 end
 
 local function get_create_badge_free_quota(
-	api_key: api_key,
-	experience_id: asset_id
+    api_key: api_key,
+    experience_id: asset_id
 )
     local response_body = api.request(
         api_key,
@@ -142,9 +138,9 @@ local function get_create_badge_free_quota(
 end
 
 local function list_badges(
-	api_key: api_key,
-	experience_id: asset_id,
-	page_cursor: string?
+    api_key: api_key,
+    experience_id: asset_id,
+    page_cursor: string?
 )
     local path = `legacy-badges/v1/universes/{experience_id}/badges`
     if page_cursor then
@@ -156,7 +152,10 @@ local function list_badges(
     return serde.decode('json', response_body)
 end
 
-local function get_all_badges(api_key: api_key, experience_id: asset_id)
+local function get_all_badges(
+    api_key: api_key,
+    experience_id: asset_id
+)
     local all_badges = {}
     local page_cursor: string? = nil
 
@@ -181,21 +180,18 @@ local function update_badge_icon(
     api_key: api_key,
     badge_id: asset_id,
     icon_file_path: string
-)
+): upload_image_response
     local file_content = fs.readFile(icon_file_path)
 
-    local boundary = '----LuneBoundary' .. tostring(os.time())
-    local parts = {}
-    form.add_form_file(parts, boundary, 'files', 'icon.png', 'image/png', file_content)
-
-    local body = form.build_multipart_body(parts, boundary)
+    local body =
+        form().part { name = 'files', file_name = 'icon.png', content_type = 'image/png', content = file_content }
 
     local response_body = api.request(
         api_key,
         `legacy-publish/v1/badges/{badge_id}/icon`,
         'POST',
-        `multipart/form-data; boundary={boundary}`,
-        body
+        `multipart/form-data; boundary={body.boundary}`,
+        body.multipart()
     )
 
     return serde.decode('json', response_body)

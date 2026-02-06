@@ -2,15 +2,8 @@
 local net = require('@lune/net')
 
 -- this
--- net.FetchParams
-export type request_config = {
-    url: string,
-    method: string,
-    body: string?,
-    headers: { [string]: string }?,
-}
-
 export type api_key = string
+export type json = string
 
 -- this
 local API_ENDPOINT = 'https://apis.roblox.com/'
@@ -21,7 +14,7 @@ local function request(
     method: net.HttpMethod,
     content_type: string,
     data: string | buffer
-): string
+): json
     local response = net.request {
         url = API_ENDPOINT .. path,
         method = method,
@@ -29,9 +22,10 @@ local function request(
         headers = {
             ['Content-Type'] = content_type,
             ['x-api-key'] = api_key,
-        },
+        }
     }
 
+    assert(response.ok and response.statusCode == 200, `HTTP [{response.statusCode}]: {response.statusMessage}`)
     return response.body
 end
 
