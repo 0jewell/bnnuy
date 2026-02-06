@@ -1,4 +1,3 @@
-```markdown
 # bnnuy
 
 bnnuy (bãnni) is a CLI tool for managing roblox experience assets through configuration files
