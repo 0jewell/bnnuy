@@ -20,7 +20,7 @@ jobs:
 
       - name: Install tools (lune & darklua)
         run: |
-          rokit install
+          rokit install --no-trust-check
 
       - name: Build Luau bundle
         run: |
