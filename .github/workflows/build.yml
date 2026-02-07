@@ -30,12 +30,14 @@ jobs:
         run: |
           lune build out\bnnuy.luau --output bnnuy.exe
 
-      - name: Rename for Rokit
+      - name: Package zip for Rokit
         run: |
-          ren bnnuy.exe bnnuy-windows-x86_64.exe
+          mkdir dist
+          move bnnuy.exe dist\bnnuy.exe
+          tar -a -c -f bnnuy-windows-x86_64.zip -C dist bnnuy.exe
 
       - name: Upload to GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload "${{ github.event.release.tag_name }}" bnnuy-windows-x86_64.exe --clobber
+          gh release upload "${{ github.event.release.tag_name }}" bnnuy-windows-x86_64.zip --clobber
