@@ -3,11 +3,14 @@
 bnnuy (bãnni) is a CLI tool for managing roblox experience assets through configuration files
 
 ## Info
-bnnuy provides a declarative YAML configuration for badges, game passes, and developer products
-Also has state tracking to avoid duplicate uploads.
+bnnuy provides a declarative YAML configuration for badges, game passes, and developer products. It also has state tracking to avoid duplicate uploads.
 
 ## Installation
-Todo
+
+- Rokit:
+```sh
+rokit add 0jewell/bnnuy
+```
 
 ## Usage
 
