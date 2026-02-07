@@ -1,0 +1,41 @@
+name: Build Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Rokit
+        uses: CompeyDev/setup-rokit@v0.1.2
+
+      - name: Install tools (lune & darklua)
+        run: |
+          rokit install
+
+      - name: Build Luau bundle
+        run: |
+          darklua process --config darklua.json src\cli\init.luau out\bnnuy.luau
+
+      - name: Build exe with Lune
+        run: |
+          lune build out\bnnuy.luau --output bnnuy.exe
+
+      - name: Rename for Rokit
+        run: |
+          ren bnnuy.exe bnnuy-windows-x86_64.exe
+
+      - name: Upload to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" bnnuy-windows-x86_64.exe --clobber
