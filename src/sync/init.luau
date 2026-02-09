@@ -1,4 +1,6 @@
 -- modules
+local stdio = require('@lune/stdio')
+
 local api = require('@lib/api')
 type api_key = api.api_key
 
@@ -82,7 +84,7 @@ local function sync_badges(
         end)
 
         if not success then
-            print(`  failed to sync badge '{key}': {err}`)
+            warn(`  failed to sync badge '{key}': {err}`)
         end
     end
 end
@@ -152,7 +154,7 @@ local function sync_passes(
         end)
 
         if not success then
-            print(`  failed to sync pass '{key}': {err}`)
+            print(stdio.color('yellow') .. `  failed to sync pass '{key}': {err}`)
         end
     end
 end

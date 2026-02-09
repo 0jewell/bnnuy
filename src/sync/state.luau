@@ -3,7 +3,7 @@ local serde = require('@lune/serde')
 local fs = require('@lune/fs')
 local process = require('@lune/process')
 
-local types = require('@lib/api/sync/types')
+local types = require('./types')
 type badge_settings = types.badge_settings
 type gamepass_settings = types.gamepass_settings
 type product_settings = types.product_settings
