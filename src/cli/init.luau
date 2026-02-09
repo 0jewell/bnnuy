@@ -3,7 +3,7 @@ local process = require('@lune/process')
 local stdio = require('@lune/stdio')
 local fs = require('@lune/fs')
 
-local sync = require('@lib/api/sync')
+local sync = require('@lib//sync')
 local user = require('@lib/api/user')
 
 -- helpers
@@ -81,10 +81,12 @@ local function cmd_upload(args: { string })
     local cookie = get_cookie(env)
     print(stdio.color('green') .. '✓' .. stdio.color('reset') .. ' Cookie loaded\n')
 
-    local success = pcall(sync.all, api_key, cookie)
+    local success, err = pcall(function()
+        sync.all(api_key, cookie)
+    end)
 
     if not success then
-        print('\n' .. stdio.color('red') .. 'sync failed' .. stdio.color('reset'))
+        print('\n' .. stdio.color('red') .. `sync failed: {tostring(err)}` .. stdio.color('reset'))
         process.exit(1)
     end
 
