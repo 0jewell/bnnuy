@@ -49,7 +49,10 @@ local function request(
         }
     end
 
-    assert(response.ok and response.statusCode == 200, `HTTP [{response.statusCode}]: {response.statusMessage}\n{response.body}`)
+    assert(
+        response.ok and (response.statusCode == 200 or response.statusCode == 204),
+        `HTTP [{response.statusCode}]: {response.statusMessage}\n{response.body}`
+    )
     return response.body
 end
 
