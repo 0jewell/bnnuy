@@ -75,3 +75,12 @@ get from: [Roblox Creator Dashboard](https://create.roblox.com/dashboard/credent
 ### Cookie (for passes & products)
 - auto-detected from Roblox Studio
 - or set `ROBLOX_COOKIE` in `.env`
+
+## Required API Scopes
+
+| Resource            | Scopes                                                                 | Documentation |
+|---------------------|------------------------------------------------------------------------|---------------|
+| Game Passes         | `game-pass:read`, `game-pass:write`                                   | https://create.roblox.com/docs/cloud/api/game-passes |
+| Developer Products  | `developer-product:read`, `developer-product:write`                   | https://create.roblox.com/docs/cloud/api/developer-products |
+| Badges              | `legacy-universe.badge:read`, `legacy-universe.badge:write`, `legacy-universe.badge:manage-and-spend-robux` | https://create.roblox.com/docs/cloud/api/badges |
+| Assets (Icons)      | `legacy-asset:manage`                                                  | https://create.roblox.com/docs/cloud/features/assets#/ |
