@@ -15,7 +15,7 @@ export type create_developer_product_icon_response = {
 }
 
 export type create_developer_product_response = {
-    id: number,
+    productId: number,
     name: string,
     description: string,
     shopId: number,

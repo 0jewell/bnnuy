@@ -130,8 +130,7 @@ local function sync_passes(
                 end
             else
                 print(`  creating pass: {config.name}`)
-                local response =
-                    passes.create_game_pass(cookie, experience_id, config.name, config.description, config.icon)
+                local response = passes.create_game_pass(cookie, experience_id, config.name, config.description, config.icon)
 
                 data.passes[key] = {
                     id = response.gamePassId,
@@ -213,13 +212,13 @@ local function sync_products(
                 )
 
                 data.products[key] = {
-                    id = response.id,
+                    id = response.productId,
                     config = diff.clone_snapshot(config),
                     icon_hash = icon_hash,
                 }
 
                 if config.icon then
-                    products.create_developer_product_icon(cookie, response.id, config.icon)
+                    products.create_developer_product_icon(cookie, response.productId, config.icon)
                 end
             end
         end)
