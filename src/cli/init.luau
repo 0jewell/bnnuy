@@ -6,6 +6,8 @@ local fs = require('@lune/fs')
 local sync = require('@lib//sync')
 local user = require('@lib/api/user')
 
+local version = require('@self/version')
+
 -- helpers
 local function load_env(): { [string]: string }
     if not fs.isFile('.env') then
@@ -50,7 +52,7 @@ local function get_cookie(env: { [string]: string }): string
 end
 
 local function print_help()
-    print(stdio.style('bold') .. 'bnnuy' .. stdio.style('reset') .. ' - roblox asset management\n')
+    print(stdio.style('bold') .. 'bnnuy ' .. version.version .. stdio.style('reset') .. ' - roblox asset management\n')
     print(stdio.style('bold') .. 'usage:' .. stdio.style('reset'))
     print('  bnnuy <command> [options]\n')
     print(stdio.style('bold') .. 'commands:' .. stdio.style('reset'))
