@@ -1,8 +1,10 @@
 -- modules
-local stdio = require('@lune/stdio')
 local fs = require('@lune/fs')
 local net = require('@lune/net')
 local serde = require('@lune/serde')
+
+local ui = require('@lib/ui')
+type progress_state = ui.progress_state
 
 local api = require('@lib/api')
 type api_key = api.api_key
@@ -19,6 +21,8 @@ type state_data = state.state
 
 local diff = require('@self/diff')
 local types = require('@self/types')
+
+export type progress_cb = (progress_state) -> ()
 
 -- this
 local function icon_name_from_item_name(name: string): string
@@ -278,17 +282,26 @@ local function sync_badges(
     api_key: api_key,
     experience_id: number,
     badge_settings: { [string]: types.badge_settings },
-    data: state_data
+    data: state_data,
+    ps: ui.progress_state,
+    cb: progress_cb
 )
-    print('syncing badges...')
-
+    local items = {}
     for key, config in badge_settings do
+        table.insert(items, { key = key, config = config })
+    end
+
+    ps.badges.total = #items
+    cb(ps)
+
+    for _, item in items do
+        local key = item.key
+        local config = item.config
+
         local success, err = pcall(function()
             validate_badge_config(key, config)
 
-            if not data.badges then
-                data.badges = {}
-            end
+            if not data.badges then data.badges = {} end
             local stored = data.badges[key]
             local icon_hash = state.hash_file(config.icon)
 
@@ -297,8 +310,6 @@ local function sync_badges(
                 local icon_changed = stored.icon_hash ~= icon_hash
 
                 if changes or icon_changed then
-                    print(`  updating badge: {config.name}`)
-
                     local needs_update = changes and (changes.name or changes.description or changes.enabled)
                     if needs_update then
                         badges.update_badge(
@@ -311,7 +322,6 @@ local function sync_badges(
                     end
 
                     if icon_changed then
-                        print(`    icon changed, uploading...`)
                         badges.update_badge_icon(api_key, stored.id, config.icon)
                     end
 
@@ -319,7 +329,6 @@ local function sync_badges(
                     data.badges[key].icon_hash = icon_hash
                 end
             else
-                print(`  creating badge: {config.name}`)
                 local response = badges.create_badge(
                     api_key,
                     experience_id,
@@ -330,7 +339,6 @@ local function sync_badges(
                     0,
                     config.enabled ~= false
                 )
-
                 data.badges[key] = {
                     id = response.id,
                     config = diff.clone_snapshot(config),
@@ -339,9 +347,14 @@ local function sync_badges(
             end
         end)
 
-        if not success then
-            warn(`  failed to sync badge '{key}': {err}`)
+        if success then
+            ps.badges.current += 1
+        else
+            ps.badges.failed += 1
+            ui.warn(`badge '{key}': {tostring(err)}`)
         end
+
+        cb(ps)
     end
 end
 
@@ -349,36 +362,44 @@ local function sync_passes(
     cookie: cookie,
     experience_id: number,
     pass_configs: { [string]: types.gamepass_settings },
-    data: state_data
+    data: state_data,
+    ps: ui.progress_state,
+    cb: progress_cb
 )
-    print('syncing passes...')
+    local items = {}
+    for key, config in pass_configs do
+        table.insert(items, { key = key, config = config })
+    end
+
+    ps.passes.total = #items
+    cb(ps)
+
     local remote_passes_by_name: { [string]: number }? = nil
     local processed_pass_ids: { [number]: string } = {}
 
     local function ensure_remote_passes_index()
-        if remote_passes_by_name then
-            return remote_passes_by_name
-        end
+        if remote_passes_by_name then return remote_passes_by_name end
 
-        local new_remote_passes_by_name = {}
-        remote_passes_by_name = new_remote_passes_by_name
+        local new_index = {}
+        remote_passes_by_name = new_index
 
         for _, remote_pass in passes.get_all_game_passes(cookie, experience_id) do
-            if not new_remote_passes_by_name[remote_pass.name] then
-                new_remote_passes_by_name[remote_pass.name] = remote_pass.gamePassId
+            if not new_index[remote_pass.name] then
+                new_index[remote_pass.name] = remote_pass.gamePassId
             end
         end
 
-        return new_remote_passes_by_name
+        return new_index
     end
 
-    for key, config in pass_configs do
+    for _, item in items do
+        local key = item.key
+        local config = item.config
+
         local success, err: any = pcall(function()
             validate_pass_config(key, config)
 
-            if not data.passes then
-                data.passes = {}
-            end
+            if not data.passes then data.passes = {} end
             local stored = data.passes[key]
             local icon_hash = state.hash_file(config.icon)
 
@@ -387,15 +408,17 @@ local function sync_passes(
 
                 if not stored.id then
                     local index = ensure_remote_passes_index()
+
                     local resolved_id = index[config.name]
                     assert(resolved_id, `could not resolve game pass id for '{config.name}'`)
+
                     stored.id = resolved_id
                     data.passes[key].id = resolved_id
                 end
 
                 if processed_pass_ids[stored.id] then
                     local original_key = processed_pass_ids[stored.id]
-                    warn(`  duplicate pass mapping: '{key}' and '{original_key}' point to the same id ({stored.id}); skipping '{key}'`)
+                    ui.warn(`duplicate pass mapping: '{key}' and '{original_key}' point to the same id ({stored.id}); skipping '{key}'`)
                     return
                 end
                 processed_pass_ids[stored.id] = key
@@ -404,7 +427,6 @@ local function sync_passes(
                 local icon_changed = stored.icon_hash ~= icon_hash
 
                 if changes or icon_changed then
-                    print(`  updating pass: {config.name}`)
                     passes.update_game_pass(
                         cookie,
                         experience_id,
@@ -414,14 +436,16 @@ local function sync_passes(
                         config.price,
                         if icon_changed and config.icon then config.icon else nil
                     )
-
                     data.passes[key].config = diff.clone_snapshot(config)
                     data.passes[key].icon_hash = icon_hash
                 end
             else
-                print(`  creating pass: {config.name}`)
-                local response = passes.create_game_pass(cookie, experience_id, config.name, config.description, config.icon)
-
+                local response = passes.create_game_pass(
+                    cookie, experience_id,
+                    config.name,
+                    config.description,
+                    config.icon
+                )
                 data.passes[key] = {
                     id = response.gamePassId,
                     config = diff.clone_snapshot(config),
@@ -440,9 +464,14 @@ local function sync_passes(
             end
         end)
 
-        if not success then
-            print(stdio.color('yellow') .. `  failed to sync pass '{key}': {err}`)
+        if success then
+            ps.passes.current += 1
+        else
+            ps.passes.failed += 1
+            ui.warn(`pass '{key}': {tostring(err)}`)
         end
+
+        cb(ps)
     end
 end
 
@@ -450,17 +479,26 @@ local function sync_products(
     cookie: cookie,
     experience_id: number,
     product_settings: { [string]: types.product_settings },
-    data: state_data
+    data: state_data,
+    ps: progress_state,
+    cb: progress_cb
 )
-    print('syncing products...')
-
+    local items = {}
     for key, config in product_settings do
+        table.insert(items, { key = key, config = config })
+    end
+
+    ps.products.total = #items
+    cb(ps)
+
+    for _, item in items do
+        local key = item.key
+        local config = item.config
+
         local success, err = pcall(function()
             validate_product_config(key, config)
 
-            if not data.products then
-                data.products = {}
-            end
+            if not data.products then data.products = {} end
             local stored = data.products[key]
 
             if stored and config.price == nil then
@@ -474,8 +512,6 @@ local function sync_products(
                 local icon_changed = stored.icon_hash ~= icon_hash
 
                 if changes or icon_changed then
-                    print(`  updating product: {config.name}`)
-
                     local needs_update = changes and (changes.name or changes.description or changes.price)
                     if needs_update then
                         products.update_developer_product(
@@ -489,7 +525,6 @@ local function sync_products(
                     end
 
                     if icon_changed then
-                        print(`    icon changed, uploading...`)
                         products.create_developer_product_icon(cookie, stored.id, config.icon)
                     end
 
@@ -497,9 +532,7 @@ local function sync_products(
                     data.products[key].icon_hash = icon_hash
                 end
             else
-                print(`  creating product: {config.name}`)
                 assert(config.price ~= nil, `invalid manifest field 'experience.products.{key}.price': expected number`)
-
                 local response = products.create_developer_product(
                     cookie,
                     experience_id,
@@ -507,7 +540,6 @@ local function sync_products(
                     config.price,
                     config.description
                 )
-
                 data.products[key] = {
                     id = response.productId,
                     config = diff.clone_snapshot(config),
@@ -520,9 +552,14 @@ local function sync_products(
             end
         end)
 
-        if not success then
-            print(`  failed to sync product '{key}': {err}`)
+        if success then
+            ps.products.current += 1
+        else
+            ps.products.failed += 1
+            ui.warn(`product '{key}': {tostring(err)}`)
         end
+
+        cb(ps)
     end
 end
 
@@ -530,35 +567,51 @@ local function import_badges(
     api_key: api_key,
     experience_id: number,
     manifest: types.config,
-    data: state_data
+    data: state_data,
+    ps: progress_state,
+    cb: progress_cb
 ): number
     local badges_settings = manifest.experience.badges
         or error(`attempt to import badges without ensuring manifest`)
 
     local imported = 0
+    local list = badges.get_all_badges(api_key, experience_id)
 
-    for _, badge in badges.get_all_badges(api_key, experience_id) do
-        if not contains_id(data.badges, badge.id) then
-            local key = unique_key(badge.name, badges_settings, data.badges)
-            local icon = ensure_icon_file('badge', badge.id, badge.name, badge.iconImageId)
+    ps.badges.total = #list
+    cb(ps)
 
-            local config: types.badge_settings = {
-                name = badge.name,
-                description = badge.description,
-                icon = icon,
-                enabled = badge.enabled,
-            }
+    for _, badge in list do
+        local success, err = pcall(function()
+            if not contains_id(data.badges, badge.id) then
+                local key = unique_key(badge.name, badges_settings, data.badges)
+                local icon = ensure_icon_file('badge', badge.id, badge.name, badge.iconImageId)
 
-            badges_settings[key] = config
+                local config: types.badge_settings = {
+                    name = badge.name,
+                    description = badge.description,
+                    icon = icon,
+                    enabled = badge.enabled,
+                }
+                badges_settings[key] = config
 
-            data.badges[key] = {
-                id = badge.id,
-                config = diff.clone_snapshot(config),
-                icon_hash = state.hash_file(icon),
-            }
+                data.badges[key] = {
+                    id = badge.id,
+                    config = diff.clone_snapshot(config),
+                    icon_hash = state.hash_file(icon),
+                }
 
-            imported += 1
+                imported += 1
+            end
+        end)
+
+        if success then
+            ps.badges.current += 1
+        else
+            ps.badges.failed += 1
+            ui.warn(`badge import failed: {tostring(err)}`)
         end
+
+        cb(ps)
     end
 
     return imported
@@ -568,63 +621,83 @@ local function import_passes(
     cookie: cookie,
     experience_id: number,
     manifest: types.config,
-    data: state_data
+    data: state_data,
+    ps: progress_state,
+    cb: progress_cb
 ): number
     local passes_settings = manifest.experience.passes
         or error(`attempt to import passes without ensuring manifest`)
 
     local imported = 0
+    local list = passes.get_all_game_passes(cookie, experience_id)
 
-    for _, pass in passes.get_all_game_passes(cookie, experience_id) do
-        local pass_id = pass.gamePassId
-        local pass_price: number? = nil
-        if pass.priceInformation then
-            pass_price = pass.priceInformation.defaultPriceInRobux
-        end
+    ps.passes.total = #list
+    cb(ps)
 
-        local existing_key: string? = nil
-        for key, stored in data.passes do
-            if stored.id == pass_id then
-                existing_key = key
-                break
+    for _, pass in list do
+        local success, err = pcall(function()
+            local pass_id = pass.gamePassId
+            local pass_price: number? = nil
+
+            if pass.priceInformation then
+                pass_price = pass.priceInformation.defaultPriceInRobux
             end
 
-            if tostring(stored.config.name) == pass.name then
-                existing_key = key
-            end
-        end
+            local existing_key: string? = nil
+            for key, stored in data.passes do
 
-        if existing_key then
-            data.passes[existing_key].id = pass_id
-            if passes_settings[existing_key] then
-                passes_settings[existing_key].name = pass.name
-                passes_settings[existing_key].description = pass.description
+                if stored.id == pass_id then
+                    existing_key = key
+                    break
+                end
 
-                if pass_price ~= nil then
-                    passes_settings[existing_key].price = pass_price
+                if tostring(stored.config.name) == pass.name then
+                    existing_key = key
                 end
             end
 
-        elseif not contains_id(data.passes, pass_id) then
-            local key = unique_key(pass.name, passes_settings, data.passes)
-            local icon = ensure_icon_file('pass', pass_id, pass.name, pass.iconAssetId)
+            if existing_key then
+                data.passes[existing_key].id = pass_id
 
-            local config: types.gamepass_settings = {
-                name = pass.name,
-                description = pass.description,
-                icon = icon,
-                price = pass_price,
-            }
+                if passes_settings[existing_key] then
+                    passes_settings[existing_key].name = pass.name
+                    passes_settings[existing_key].description = pass.description
 
-            passes_settings[key] = config
-            data.passes[key] = {
-                id = pass_id,
-                config = diff.clone_snapshot(config),
-                icon_hash = state.hash_file(icon),
-            }
+                    if pass_price ~= nil then
+                        passes_settings[existing_key].price = pass_price
+                    end
+                end
 
-            imported += 1
+            elseif not contains_id(data.passes, pass_id) then
+                local key = unique_key(pass.name, passes_settings, data.passes)
+                local icon = ensure_icon_file('pass', pass_id, pass.name, pass.iconAssetId)
+
+                local config: types.gamepass_settings = {
+                    name = pass.name,
+                    description = pass.description,
+                    icon = icon,
+                    price = pass_price,
+                }
+                passes_settings[key] = config
+
+                data.passes[key] = {
+                    id = pass_id,
+                    config = diff.clone_snapshot(config),
+                    icon_hash = state.hash_file(icon),
+                }
+
+                imported += 1
+            end
+        end)
+
+        if success then
+            ps.passes.current += 1
+        else
+            ps.passes.failed += 1
+            ui.warn(`pass import failed: {tostring(err)}`)
         end
+
+        cb(ps)
     end
 
     return imported
@@ -634,60 +707,86 @@ local function import_products(
     cookie: cookie,
     experience_id: number,
     manifest: types.config,
-    data: state_data
+    data: state_data,
+    ps: progress_state,
+    cb: progress_cb
 ): number
     local products_settings = manifest.experience.products
         or error(`attempt to import products without ensuring manifest`)
 
     local imported = 0
+    local list = products.get_all_developer_products(cookie, experience_id)
 
-    for _, product in products.get_all_developer_products(cookie, experience_id) do
-        if not contains_id(data.products, product.productId) then
-            local key = unique_key(product.name, products_settings, data.products)
-            local icon = ensure_icon_file('product', product.productId, product.name, product.iconImageAssetId)
+    ps.products.total = #list
+    cb(ps)
 
-            local config: types.product_settings = {
-                name = product.name,
-                description = product.description,
-                icon = icon,
-                price = product.priceInRobux,
-            }
+    for _, product in list do
+        local success, err = pcall(function()
+            if not contains_id(data.products, product.productId) then
+                local key = unique_key(product.name, products_settings, data.products)
+                local icon = ensure_icon_file('product', product.productId, product.name, product.iconImageAssetId)
 
-            products_settings[key] = config
-            data.products[key] = {
-                id = product.productId,
-                config = diff.clone_snapshot(config),
-                icon_hash = state.hash_file(icon),
-            }
+                local config: types.product_settings = {
+                    name = product.name,
+                    description = product.description,
+                    icon = icon,
+                    price = product.priceInRobux,
+                }
+                products_settings[key] = config
 
-            imported += 1
+                data.products[key] = {
+                    id = product.productId,
+                    config = diff.clone_snapshot(config),
+                    icon_hash = state.hash_file(icon),
+                }
+
+                imported += 1
+            end
+        end)
+
+        if success then
+            ps.products.current += 1
+        else
+            ps.products.failed += 1
+            ui.warn(`product import failed: {tostring(err)}`)
         end
+
+        cb(ps)
     end
 
     return imported
 end
 
-local function sync(api_key: api_key, cookie: cookie)
+local function sync(api_key: api_key, cookie: cookie, version: string)
     local config = state.read_manifest()
 
     local data = state.load_state() or state.create_initial_state(config.experience.id)
     assert(data.experience_id == config.experience.id, 'experience id mismatch in state file')
+
     ensure_state_tables(data)
 
+	local ps: progress_state = {
+		badges = { current = 0, total = 0, failed = 0 },
+		passes = { current = 0, total = 0, failed = 0 },
+		products = { current = 0, total = 0, failed = 0 },
+		label = "uploading...",
+		done = false,
+	}
+
+    local update = ui.start_progress(version)
+
     if config.experience.badges then
-        sync_badges(api_key, config.experience.id, config.experience.badges, data)
+        sync_badges(api_key, config.experience.id, config.experience.badges, data, ps, update)
     end
-
     if config.experience.passes then
-        sync_passes(cookie, config.experience.id, config.experience.passes, data)
+        sync_passes(cookie, config.experience.id, config.experience.passes, data, ps, update)
     end
-
     if config.experience.products then
-        sync_products(cookie, config.experience.id, config.experience.products, data)
+        sync_products(cookie, config.experience.id, config.experience.products, data, ps, update)
     end
 
     state.save_state(data)
-    print('sync complete!')
+    ui.finish(true, 'upload complete')
 end
 
 local function import_all_assets(
@@ -695,7 +794,8 @@ local function import_all_assets(
     cookie: cookie,
     experience_id: number,
     output: string?,
-    force: boolean?
+    force: boolean?,
+    version: string
 )
     local output_file = output or 'bnnuy.yml'
     local manifest: types.config
@@ -707,52 +807,50 @@ local function import_all_assets(
     else
         data = state.load_state() or state.create_initial_state(experience_id)
         assert(data.experience_id == experience_id, 'experience id mismatch in state file. use --force to overwrite')
-
         manifest = state.load_manifest(output_file) or state.make_manifest(experience_id)
         assert(manifest.experience.id == experience_id, 'experience id mismatch in manifest file. use --force to overwrite')
-
         ensure_manifest_has_state(manifest, data)
     end
 
     ensure_state_tables(data)
 
-    print(`importing assets from experience {experience_id}...`)
-    local badges_count = 0
-    local badges_ok, badges_err = pcall(function()
-        badges_count = import_badges(api_key, experience_id, manifest, data)
-    end)
+	local ps: ui.progress_state = {
+		badges = { current = 0, total = 0, failed = 0 },
+		passes = { current = 0, total = 0, failed = 0 },
+		products = { current = 0, total = 0, failed = 0 },
+		label = "importing...",
+		done = false,
+	}
+
+    local update = ui.start_progress(version)
+
+    local badges_ok, badges_err = pcall(import_badges, api_key, experience_id, manifest, data, ps, update)
     if not badges_ok then
-        print(stdio.color('yellow') .. `warning: badge import failed: {tostring(badges_err)}` .. stdio.color('reset'))
+        ps.badges.failed += 1
+        ui.warn(`badge import failed: {tostring(badges_err)}`)
     end
+    update(ps)
 
-    local passes_count = 0
-    local passes_ok, passes_err = pcall(function()
-        passes_count = import_passes(cookie, experience_id, manifest, data)
-    end)
-
+    local passes_ok, passes_err = pcall(import_passes, cookie, experience_id, manifest, data, ps, update)
     if not passes_ok then
-        print(stdio.color('yellow') .. `warning: pass import failed: {tostring(passes_err)}` .. stdio.color('reset'))
+        ps.passes.failed += 1
+        ui.warn(`pass import failed: {tostring(passes_err)}`)
     end
+    update(ps)
 
-    local products_count = 0
-    local products_ok, products_err = pcall(function()
-        products_count = import_products(cookie, experience_id, manifest, data)
-    end)
-
+    local products_ok, products_err = pcall(import_products, cookie, experience_id, manifest, data, ps, update)
     if not products_ok then
-        print(stdio.color('yellow') .. `warning: product import failed: {tostring(products_err)}` .. stdio.color('reset'))
+        ps.products.failed += 1
+        ui.warn(`product import failed: {tostring(products_err)}`)
     end
+    update(ps)
 
     state.save_manifest(manifest, output_file)
     state.save_state(data)
-
-    print(stdio.color('green') .. 'import complete' .. stdio.color('reset'))
-    print(`  badges imported: {badges_count}`)
-    print(`  passes imported: {passes_count}`)
-    print(`  products imported: {products_count}`)
+    ui.finish(true, 'import complete')
 end
 
 return table.freeze {
-    all = sync,
+    all    = sync,
     import = import_all_assets
 }
