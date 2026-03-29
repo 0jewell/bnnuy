@@ -51,15 +51,57 @@ local function get_cookie(env: { [string]: string }): string
     return user.get_cookie(env.ROBLOX_COOKIE)
 end
 
+local function parse_import_options(args: { string }): (number, string?, boolean)
+    local experience_id: number? = nil
+    local output: string? = nil
+    local force = false
+
+    local i = 1
+    while i <= #args do
+        local arg = args[i]
+
+        if arg == '--force' or arg == '-f' then
+            force = true
+            i += 1
+            continue
+        end
+
+        if arg == '--output' or arg == '-o' then
+            output = args[i + 1]
+            assert(output, 'missing value for --output')
+            i += 2
+            continue
+        end
+
+        if arg == '--api-key' or arg == '-k' then
+            assert(args[i + 1], 'missing value for --api-key')
+            i += 2
+            continue
+        end
+
+        if arg ~= 'import' and string.sub(arg, 1, 1) ~= '-' and not experience_id then
+            experience_id = tonumber(arg)
+        end
+
+        i += 1
+    end
+
+    assert(experience_id, 'missing experience id')
+    return experience_id, output, force
+end
+
 local function print_help()
     print(stdio.style('bold') .. 'bnnuy ' .. version.version .. stdio.style('reset') .. ' - roblox asset management\n')
     print(stdio.style('bold') .. 'usage:' .. stdio.style('reset'))
     print('  bnnuy <command> [options]\n')
     print(stdio.style('bold') .. 'commands:' .. stdio.style('reset'))
     print('  upload             upload badges, passes, and products')
+    print('  import <id>        import assets from a roblox experience')
     print('  help               show this help message\n')
     print(stdio.style('bold') .. 'options:' .. stdio.style('reset'))
     print('  --api-key, -k      roblox API key (or use .env)')
+    print('  --output, -o       output manifest file (import only)')
+    print('  --force, -f        overwrite manifest and state on import')
     print('  --help, -h         show help\n')
     print(stdio.style('bold') .. 'enviroment:' .. stdio.style('reset'))
     print('  Create a .env file with:')
@@ -95,6 +137,28 @@ local function cmd_upload(args: { string })
     print('\n' .. stdio.color('green') .. 'upload complete' .. stdio.color('reset'))
 end
 
+local function cmd_import(args: { string })
+    local env = load_env()
+    local api_key = get_api_key(args, env) :: string
+    if not api_key then
+        print(stdio.color('red') .. 'no API key provided' .. stdio.color('reset'))
+        print_help()
+        process.exit(1)
+    end
+
+    local cookie = get_cookie(env)
+    local experience_id, output, force = parse_import_options(args)
+
+    local success, err = pcall(function()
+        sync.import(api_key, cookie, experience_id, output, force)
+    end)
+
+    if not success then
+        print('\n' .. stdio.color('red') .. `import failed: {tostring(err)}` .. stdio.color('reset'))
+        process.exit(1)
+    end
+end
+
 -- this
 local args = process.args
 
@@ -107,6 +171,8 @@ local command = args[1]
 
 if command == 'upload' or command == 'sync' then
     cmd_upload(args)
+elseif command == 'import' then
+    cmd_import(args)
 elseif command == 'help' or command == '--help' or command == '-h' then
     print_help()
 else

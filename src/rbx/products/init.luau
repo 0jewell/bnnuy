@@ -34,20 +34,16 @@ export type get_developer_product_response = {
 }
 
 export type list_developer_product_response_item = {
-    ProductId: number,
-    DeveloperProductId: number,
-    Name: string,
-    Description: string,
-    IconImageAssetId: number,
-    displayName: string,
-    displayDescription: string,
-    PriceInRobux: number,
+    productId: number,
+    name: string,
+    description: string,
+    iconImageAssetId: number,
+    priceInRobux: number,
 }
 
 export type list_developer_products_response = {
-    DeveloperProducts: { list_developer_product_response_item },
-    FinalPage: boolean,
-    PageSize: number,
+    developerProducts: { list_developer_product_response_item },
+    nextPageToken: string?,
 }
 
 local function create_developer_product_icon(
@@ -89,12 +85,14 @@ end
 local function list_developer_products(
     cookie: cookie,
     experience_id: asset_id,
-    page: number
+    page_token: string?
 ): list_developer_products_response
-    local path = `developer-products/v1/developer-products/list?universeId={experience_id}&page={page}`
+    local v2_path = `developer-products/v2/universes/{experience_id}/developer-products/creator`
+    if page_token then
+        v2_path = v2_path .. `?pageToken={page_token}`
+    end
 
-    local response_body = user.request(cookie, path, 'GET', 'application/json', '')
-
+    local response_body = user.request(cookie, v2_path, 'GET', 'application/json', '')
     return serde.decode('json', response_body)
 end
 
@@ -103,20 +101,21 @@ local function get_all_developer_products(
     experience_id: asset_id
 ): { list_developer_product_response_item }
     local all_products = {}
-    local page = 1
+    local page_token: string? = nil
 
     while true do
-        local response = list_developer_products(cookie, experience_id, page)
+        local response = list_developer_products(cookie, experience_id, page_token)
+        local items = response.developerProducts
 
-        for _, product in response.DeveloperProducts do
+        for _, product in items do
             table.insert(all_products, product)
         end
 
-        if response.FinalPage then
+        if not response.nextPageToken then
             break
         end
 
-        page += 1
+        page_token = response.nextPageToken
     end
 
     return all_products
@@ -164,5 +163,5 @@ return table.freeze {
     list_developer_products = list_developer_products,
     get_all_developer_products = get_all_developer_products,
     get_developer_product = get_developer_product,
-    update_developer_product = update_developer_product,
+    update_developer_product = update_developer_product
 }

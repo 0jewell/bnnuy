@@ -1,6 +1,7 @@
 -- modules
 local serde = require('@lune/serde')
 local fs = require('@lune/fs')
+local net = require('@lune/net')
 
 local api = require('@lib/api')
 local form = require('@lib/api/form')
@@ -142,15 +143,26 @@ local function list_badges(
     api_key: api_key,
     experience_id: asset_id,
     page_cursor: string?
-)
-    local path = `legacy-badges/v1/universes/{experience_id}/badges`
+): list_badges_response
+    local url = `https://badges.roblox.com/v1/universes/{experience_id}/badges?limit=100&sortOrder=Asc`
     if page_cursor then
-        path = path .. `?cursor={page_cursor}`
+        url = url .. `&cursor={page_cursor}`
     end
 
-    local response_body = api.request(api_key, path, 'GET', 'application/json', '')
+    local response = net.request {
+        url = url,
+        method = 'GET',
+        headers = {
+            ['x-api-key'] = api_key,
+        }
+    }
 
-    return serde.decode('json', response_body)
+    assert(
+        response.ok and (response.statusCode == 200 or response.statusCode == 204),
+        `HTTP [{response.statusCode}]: {response.statusMessage}`
+    )
+
+    return serde.decode('json', response.body)
 end
 
 local function get_all_badges(
@@ -167,11 +179,12 @@ local function get_all_badges(
             table.insert(all_badges, badge)
         end
 
-        if not response.next_page_cursor then
+        local next_cursor = response.nextPageCursor
+        if not next_cursor then
             break
         end
 
-        page_cursor = response.next_page_cursor
+        page_cursor = next_cursor
     end
 
     return all_badges
@@ -205,5 +218,5 @@ return table.freeze {
     get_create_badge_free_quota = get_create_badge_free_quota,
     list_badges = list_badges,
     get_all_badges = get_all_badges,
-    update_badge_icon = update_badge_icon,
+    update_badge_icon = update_badge_icon
 }

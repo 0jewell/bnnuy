@@ -11,47 +11,51 @@ local form = require('@lib/api/form')
 export type asset_id = number
 
 export type list_game_pass_response = {
-    id: number,
+    gamePassId: number,
     name: string,
-    displayName: string,
-    productId: number?,
-    price: number?,
+    description: string,
+    iconAssetId: number?,
+    isForSale: boolean?,
+    priceInformation: {
+        defaultPriceInRobux: number?,
+        enabledFeatures: { string }?,
+    }?,
+    createdTimestamp: string?,
+    updatedTimestamp: string?,
 }
 
 export type list_game_passes_response = {
-    previousPageCursor: string?,
-    nextPageCursor: string?,
-    data: { list_game_pass_response },
+    gamePasses: { list_game_pass_response }
 }
 
 export type get_game_pass_response = {
-    TargetId: number,
-    ProductType: string?,
-    AssetId: number,
-    ProductId: number,
-    Name: string,
-    Description: string,
-    AssetTypeId: number,
-    Creator: {
-        Id: number,
-        Name: string,
-        CreatorType: string,
-        CreatorTargetId: number,
+    targetId: number,
+    productType: string?,
+    assetId: number,
+    productId: number,
+    name: string,
+    description: string,
+    assetTypeId: number,
+    creator: {
+        id: number,
+        name: string,
+        creatorType: string,
+        creatorTargetId: number,
     },
-    IconImageAssetId: number,
-    Created: string,
-    Updated: string,
-    PriceInRobux: number?,
-    PriceInTickets: number?,
-    Sales: number,
-    IsNew: boolean,
-    IsForSale: boolean,
-    IsPublicDomain: boolean,
-    IsLimited: boolean,
-    IsLimitedUnique: boolean,
-    Remaining: number?,
-    MinimumMembershipLevel: number,
-    ContentRatingTypeId: number,
+    iconImageAssetId: number,
+    created: string,
+    updated: string,
+    priceInRobux: number?,
+    priceInTickets: number?,
+    sales: number,
+    isNew: boolean,
+    isForSale: boolean,
+    isPublicDomain: boolean,
+    isLimited: boolean,
+    isLimitedUnique: boolean,
+    remaining: number?,
+    minimumMembershipLevel: number,
+    contentRatingTypeId: number,
 }
 
 export type create_game_pass_response = {
@@ -63,14 +67,9 @@ export type create_game_pass_response = {
 
 local function list_game_passes(
     cookie: cookie,
-    experience_id: asset_id,
-    page_cursor: string?
+    experience_id: asset_id
 ): list_game_passes_response
     local path = `game-passes/v1/universes/{experience_id}/game-passes/creator?limit=100`
-    if page_cursor then
-        path = path .. `&cursor={page_cursor}`
-    end
-
     local response_body = user.request(cookie, path, 'GET', 'application/json', '')
 
     return serde.decode('json', response_body)
@@ -91,8 +90,8 @@ local function get_game_pass(
 
     local model: get_game_pass_response = serde.decode('json', response_body)
 
-    if model.TargetId == 0 then
-        model.TargetId = game_pass_id
+    if model.targetId == 0 then
+        model.targetId = game_pass_id
     end
 
     return model
@@ -101,23 +100,15 @@ end
 local function get_all_game_passes(
     cookie: cookie,
     experience_id: asset_id
-): { get_game_pass_response }
+): { list_game_pass_response }
     local all_game_passes = {}
-    local page_cursor: string? = nil
 
-    while true do
-        local response = list_game_passes(cookie, experience_id, page_cursor)
+    local response = list_game_passes(cookie, experience_id)
+    local items = response.gamePasses
 
-        for _, game_pass in response.data do
-            local full_game_pass = get_game_pass(cookie, experience_id, game_pass.id)
-            table.insert(all_game_passes, full_game_pass)
-        end
-
-        if not response.nextPageCursor then
-            break
-        end
-
-        page_cursor = response.nextPageCursor
+    for _, game_pass in items do
+        assert(game_pass.gamePassId, "invalid game pass payload: missing 'gamePassId'")
+        table.insert(all_game_passes, game_pass)
     end
 
     return all_game_passes
@@ -193,5 +184,5 @@ return table.freeze {
     get_game_pass = get_game_pass,
     get_all_game_passes = get_all_game_passes,
     create_game_pass = create_game_pass,
-    update_game_pass = update_game_pass,
+    update_game_pass = update_game_pass
 }

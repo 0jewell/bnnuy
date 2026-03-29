@@ -67,6 +67,24 @@ Upload with explicit API key:
 bnnuy upload --api-key your-key-here
 ```
 
+Import all existing assets from an experience:
+
+```sh
+bnnuy import 424242424 --api-key your-key-here
+```
+
+Import to a different manifest file:
+
+```sh
+bnnuy import 424242424 --output imported.yml --api-key your-key-here
+```
+
+Force overwrite current manifest/state with imported data:
+
+```sh
+bnnuy import 424242424 --force --api-key your-key-here
+```
+
 ## Authentication
 
 ### API Key (for badges)
