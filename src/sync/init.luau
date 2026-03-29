@@ -1,6 +1,8 @@
 -- modules
 local stdio = require('@lune/stdio')
 local fs = require('@lune/fs')
+local net = require('@lune/net')
+local serde = require('@lune/serde')
 
 local api = require('@lib/api')
 type api_key = api.api_key
@@ -32,7 +34,48 @@ local function icon_name_from_item_name(name: string): string
     return normalized
 end
 
-local function ensure_placeholder_icon(asset_type: string, asset_id: number, item_name: string): string
+type thumbnail_response = { data: { { imageUrl: string? } } }
+
+local function try_download_remote_icon(icon_asset_id: number, output_path: string): boolean
+    local thumb_url =
+        `https://thumbnails.roblox.com/v1/assets?assetIds={icon_asset_id}&size=420x420&format=Png&isCircular=false`
+
+    local thumb_response = net.request {
+        url = thumb_url,
+        method = 'GET',
+    }
+    if not thumb_response.ok or thumb_response.statusCode ~= 200 then
+        return false
+    end
+
+    local payload: thumbnail_response = serde.decode('json', thumb_response.body)
+    if #payload.data == 0 then
+        return false
+    end
+
+    local image_url = payload.data[1].imageUrl
+    if not image_url or image_url == '' then
+        return false
+    end
+
+    local image_response = net.request {
+        url = image_url,
+        method = 'GET',
+    }
+    if not image_response.ok or image_response.statusCode ~= 200 then
+        return false
+    end
+
+    fs.writeFile(output_path, image_response.body)
+    return true
+end
+
+local function ensure_icon_file(
+    asset_type: string,
+    asset_id: number,
+    item_name: string,
+    icon_asset_id: number?
+): string
     local icon_dir = '.bnnuy-icons'
     if not fs.isDir(icon_dir) then
         fs.writeDir(icon_dir)
@@ -42,7 +85,14 @@ local function ensure_placeholder_icon(asset_type: string, asset_id: number, ite
     local path = `{icon_dir}/{file_base_name}-{asset_id}.png`
 
     if not fs.isFile(path) then
-        fs.writeFile(path, `imported placeholder icon for {asset_type} {asset_id} ({item_name})`)
+        local downloaded = false
+        if icon_asset_id then
+            downloaded = try_download_remote_icon(icon_asset_id, path)
+        end
+
+        if not downloaded then
+            fs.writeFile(path, `imported placeholder icon for {asset_type} {asset_id} ({item_name})`)
+        end
     end
 
     return path
@@ -498,7 +548,7 @@ local function import_badges(
     for _, badge in badges.get_all_badges(api_key, experience_id) do
         if not contains_id(data.badges, badge.id) then
             local key = unique_key(badge.name, badges_settings, data.badges)
-            local icon = ensure_placeholder_icon('badge', badge.id, badge.name)
+            local icon = ensure_icon_file('badge', badge.id, badge.name, badge.iconImageId)
 
             local config: types.badge_settings = {
                 name = badge.name,
@@ -563,7 +613,7 @@ local function import_passes(
             end
         elseif not contains_id(data.passes, pass_id) then
             local key = unique_key(pass.name, passes_settings, data.passes)
-            local icon = ensure_placeholder_icon('pass', pass_id, pass.name)
+            local icon = ensure_icon_file('pass', pass_id, pass.name, pass.iconAssetId)
 
             local config: types.gamepass_settings = {
                 name = pass.name,
@@ -600,7 +650,7 @@ local function import_products(
     for _, product in products.get_all_developer_products(cookie, experience_id) do
         if not contains_id(data.products, product.productId) then
             local key = unique_key(product.name, products_settings, data.products)
-            local icon = ensure_placeholder_icon('product', product.productId, product.name)
+            local icon = ensure_icon_file('product', product.productId, product.name, product.iconImageAssetId)
 
             local config: types.product_settings = {
                 name = product.name,
