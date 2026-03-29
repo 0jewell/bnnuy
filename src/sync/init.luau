@@ -151,40 +151,34 @@ local function ensure_manifest_has_state(
     manifest: types.config,
     data: state_data
 )
-    ensure_state_tables(data)
+	ensure_state_tables(data)
 
-    local badges_settings = manifest.experience.badges or {}
-    manifest.experience.badges = badges_settings
+	local badges_settings = manifest.experience.badges or {}
+	manifest.experience.badges = badges_settings
 
-    local passes_settings = manifest.experience.passes or {}
-    manifest.experience.passes = passes_settings
+	local passes_settings = manifest.experience.passes or {}
+	manifest.experience.passes = passes_settings
 
-    local products_settings = manifest.experience.products or {}
-    manifest.experience.products = products_settings
+	local products_settings = manifest.experience.products or {}
+	manifest.experience.products = products_settings
 
-    if data.badges then
-        for key, stored in data.badges do
-            if not badges_settings[key] then
-                badges_settings[key] = diff.clone_snapshot(stored.config)
-            end
-        end
-    end
+	for key, stored in data.badges do
+		if not badges_settings[key] then
+			badges_settings[key] = diff.clone_snapshot(stored.config)
+		end
+	end
 
-    if data.passes then
-        for key, stored in data.passes do
-            if not passes_settings[key] then
-                passes_settings[key] = diff.clone_snapshot(stored.config)
-            end
-        end
-    end
+	for key, stored in data.passes do
+		if not passes_settings[key] then
+			passes_settings[key] = diff.clone_snapshot(stored.config)
+		end
+	end
 
-    if data.products then
-        for key, stored in data.products do
-            if not products_settings[key] then
-                products_settings[key] = diff.clone_snapshot(stored.config)
-            end
-        end
-    end
+	for key, stored in data.products do
+		if not products_settings[key] then
+			products_settings[key] = diff.clone_snapshot(stored.config)
+		end
+	end
 end
 
 local function coerce_string_field(value: any, field_path: string, allow_empty: boolean?): string
@@ -248,12 +242,15 @@ end
 local function normalize_stored_pass_config(key: string, config: types.gamepass_settings)
     local base = `state.passes.{key}.config`
     config.name = coerce_string_field(config.name, `{base}.name`)
+
     if config.description == nil then
         config.description = ''
     else
         config.description = coerce_string_field(config.description, `{base}.description`, true)
     end
+
     config.icon = coerce_string_field(config.icon, `{base}.icon`)
+
     if config.price ~= nil then
         config.price = coerce_number_field(config.price, `{base}.price`)
     end
@@ -415,12 +412,8 @@ local function sync_passes(
                         config.name,
                         config.description,
                         config.price,
-                        if icon_changed then config.icon else nil
+                        if icon_changed and config.icon then config.icon else nil
                     )
-
-                    if icon_changed then
-                        print(`    icon changed, uploading...`)
-                    end
 
                     data.passes[key].config = diff.clone_snapshot(config)
                     data.passes[key].icon_hash = icon_hash
@@ -435,17 +428,15 @@ local function sync_passes(
                     icon_hash = icon_hash,
                 }
 
-                if config.price then
-                    passes.update_game_pass(
-                        cookie,
-                        experience_id,
-                        response.gamePassId,
-                        config.name,
-                        config.description,
-                        config.price,
-                        nil
-                    )
-                end
+                passes.update_game_pass(
+                    cookie,
+                    experience_id,
+                    response.gamePassId,
+                    config.name,
+                    config.description,
+                    config.price,
+                    config.icon
+                )
             end
         end)
 
@@ -508,6 +499,7 @@ local function sync_products(
             else
                 print(`  creating product: {config.name}`)
                 assert(config.price ~= nil, `invalid manifest field 'experience.products.{key}.price': expected number`)
+
                 local response = products.create_developer_product(
                     cookie,
                     experience_id,
@@ -607,10 +599,12 @@ local function import_passes(
             if passes_settings[existing_key] then
                 passes_settings[existing_key].name = pass.name
                 passes_settings[existing_key].description = pass.description
+
                 if pass_price ~= nil then
                     passes_settings[existing_key].price = pass_price
                 end
             end
+
         elseif not contains_id(data.passes, pass_id) then
             local key = unique_key(pass.name, passes_settings, data.passes)
             local icon = ensure_icon_file('pass', pass_id, pass.name, pass.iconAssetId)
@@ -735,6 +729,7 @@ local function import_all_assets(
     local passes_ok, passes_err = pcall(function()
         passes_count = import_passes(cookie, experience_id, manifest, data)
     end)
+
     if not passes_ok then
         print(stdio.color('yellow') .. `warning: pass import failed: {tostring(passes_err)}` .. stdio.color('reset'))
     end
@@ -743,6 +738,7 @@ local function import_all_assets(
     local products_ok, products_err = pcall(function()
         products_count = import_products(cookie, experience_id, manifest, data)
     end)
+
     if not products_ok then
         print(stdio.color('yellow') .. `warning: product import failed: {tostring(products_err)}` .. stdio.color('reset'))
     end

@@ -157,11 +157,6 @@ local function list_badges(
         }
     }
 
-    assert(
-        response.ok and (response.statusCode == 200 or response.statusCode == 204),
-        `HTTP [{response.statusCode}]: {response.statusMessage}`
-    )
-
     return serde.decode('json', response.body)
 end
 
