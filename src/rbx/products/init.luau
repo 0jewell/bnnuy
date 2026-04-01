@@ -18,19 +18,16 @@ export type create_developer_product_response = {
     productId: number,
     name: string,
     description: string,
-    shopId: number,
-    iconImageAssetId: number,
+    iconImageAssetId: number?,
+    priceInRobux: number?,
 }
 
 export type get_developer_product_response = {
-    id: number,
+    productId: number,
     name: string,
     description: string,
-    shopId: number,
-    iconImageAssetId: number,
-    displayName: string,
-    displayDescription: string,
-    priceInRobux: number,
+    iconImageAssetId: number?,
+    priceInRobux: number?,
 }
 
 export type list_developer_product_response_item = {
@@ -74,10 +71,17 @@ local function create_developer_product(
     price: number,
     description: string
 ): create_developer_product_response
-    local path =
-        `developer-products/v1/universes/{experience_id}/developerproducts?name={name}&priceInRobux={price}&description={description}`
-
-    local response_body = user.request(cookie, path, 'POST', 'application/json', '')
+    local response_body = user.request(
+        cookie,
+        `developer-products/v2/universes/{experience_id}/developer-products`,
+        'POST',
+        'application/json',
+        serde.encode('json', {
+            name = name,
+            description = description,
+            priceInRobux = price,
+        })
+    )
 
     return serde.decode('json', response_body)
 end
@@ -123,11 +127,12 @@ end
 
 local function get_developer_product(
     cookie: cookie,
+    experience_id: asset_id,
     developer_product_id: asset_id
 ): get_developer_product_response
     local response_body = user.request(
         cookie,
-        `developer-products/v1/developer-products/{developer_product_id}`,
+        `developer-products/v2/universes/{experience_id}/developer-products/{developer_product_id}/creator`,
         'GET',
         'application/json',
         ''
@@ -146,13 +151,13 @@ local function update_developer_product(
 ): ()
     user.request(
         cookie,
-        `developer-products/v1/universes/{experience_id}/developerproducts/{product_id}/update`,
-        'POST',
+        `developer-products/v2/universes/{experience_id}/developer-products/{product_id}`,
+        'PATCH',
         'application/json',
         serde.encode('json', {
-            Name = name,
-            PriceInRobux = price,
-            Description = description,
+            name = name,
+            priceInRobux = price,
+            description = description,
         })
     )
 end
