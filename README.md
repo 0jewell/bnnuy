@@ -34,6 +34,7 @@ experience:
       name: Floppy Ears
       description: Cosmetic ears.
       icon: assets/passes/floppy-ears.png
+      forSale: true
       price: 299
 
   products:
@@ -42,6 +43,9 @@ experience:
       description: A small crate of fresh carrots.
       icon: assets/products/carrots-small.png
       price: 25
+      sku: carrot_bundle_small
+      category: consumable
+      amount: 10
 ```
 
 ### Environment Setup
@@ -84,6 +88,12 @@ Force overwrite current manifest/state with imported data:
 ```sh
 bnnuy import 424242424 --force --api-key your-key-here
 ```
+
+### Additional Product Fields
+
+You can define extra custom fields directly on each product entry in `bnnuy.yml` (same level as `name`, `description`, `icon`, `price`).
+
+During sync/import, these extra fields are preserved in local snapshots and written to `.bnnuy-state.yml` as part of product `config`, but they are not sent in Roblox API requests.
 
 ## Authentication
 
