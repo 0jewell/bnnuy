@@ -21,6 +21,21 @@ type badge_settings_type = types.badge_settings
 type pass_settings_type = types.gamepass_settings
 type product_settings_type = types.product_settings
 
+local function print_failure_report(
+    operation: string,
+    failures: { string }
+)
+    if #failures == 0 then
+        ui.finish(true, `{operation} complete`)
+        return
+    end
+
+    ui.finish(false, `{operation} complete with {#failures} failure(s)`)
+    for _, failure in failures do
+        ui.warn(failure)
+    end
+end
+
 local MAX_ACTIVITY_NAME_LEN = 28
 
 local function truncate_activity_name(name: string): string
@@ -55,7 +70,8 @@ local function sync_badges(
     badge_settings: { [string]: badge_settings_type },
     data: state_data,
     progress: progress_state,
-    update_progress: progress_cb
+    update_progress: progress_cb,
+    failures: { string }
 )
     local items = {}
     for key, config in badge_settings do
@@ -127,7 +143,7 @@ local function sync_badges(
             progress.badges.current += 1
         else
             progress.badges.failed += 1
-            ui.warn(`badge '{key}': {tostring(err)}`)
+            table.insert(failures, `badge '{key}': {tostring(err)}`)
         end
 
         update_progress(progress)
@@ -140,7 +156,8 @@ local function sync_passes(
     pass_settings: { [string]: pass_settings_type },
     data: state_data,
     progress: progress_state,
-    update_progress: progress_cb
+    update_progress: progress_cb,
+    failures: { string }
 )
     local items = {}
     for key, config in pass_settings do
@@ -260,7 +277,7 @@ local function sync_passes(
             progress.passes.current += 1
         else
             progress.passes.failed += 1
-            ui.warn(`pass '{key}': {tostring(err)}`)
+            table.insert(failures, `pass '{key}': {tostring(err)}`)
         end
 
         update_progress(progress)
@@ -273,7 +290,8 @@ local function sync_products(
     product_settings: { [string]: product_settings_type },
     data: state_data,
     progress: progress_state,
-    update_progress: progress_cb
+    update_progress: progress_cb,
+    failures: { string }
 )
     local items = {}
     for key, config in product_settings do
@@ -353,7 +371,7 @@ local function sync_products(
             progress.products.current += 1
         else
             progress.products.failed += 1
-            ui.warn(`product '{key}': {tostring(err)}`)
+            table.insert(failures, `product '{key}': {tostring(err)}`)
         end
 
         update_progress(progress)
@@ -367,20 +385,21 @@ local function run(api_key: api_key, cookie: cookie, version: string)
 
     local progress = ui.make_progress('uploading...')
     local update_progress = ui.start_progress(version)
+    local failures = {}
 
     if manifest.experience.badges then
-        sync_badges(api_key, manifest.experience.id, manifest.experience.badges, data, progress, update_progress)
+        sync_badges(api_key, manifest.experience.id, manifest.experience.badges, data, progress, update_progress, failures)
     end
     if manifest.experience.passes then
-        sync_passes(cookie, manifest.experience.id, manifest.experience.passes, data, progress, update_progress)
+        sync_passes(cookie, manifest.experience.id, manifest.experience.passes, data, progress, update_progress, failures)
     end
     if manifest.experience.products then
-        sync_products(cookie, manifest.experience.id, manifest.experience.products, data, progress, update_progress)
+        sync_products(cookie, manifest.experience.id, manifest.experience.products, data, progress, update_progress, failures)
     end
 
     state.save_state(data)
     state.clean_yaml_files()
-    ui.finish(true, 'upload complete')
+    print_failure_report('upload', failures)
 end
 
 return run

@@ -21,6 +21,21 @@ type badge_settings_type = types.badge_settings
 type pass_settings_type = types.gamepass_settings
 type product_settings_type = types.product_settings
 
+local function print_failure_report(
+    operation: string,
+    failures: { string }
+)
+    if #failures == 0 then
+        ui.finish(true, `{operation} complete`)
+        return
+    end
+
+    ui.finish(false, `{operation} complete with {#failures} failure(s)`)
+    for _, failure in failures do
+        ui.warn(failure)
+    end
+end
+
 local MAX_ACTIVITY_NAME_LEN = 28
 
 local function truncate_activity_name(name: string): string
@@ -55,7 +70,8 @@ local function import_badges(
     manifest: manifest_config_type,
     data: state_data,
     progress: progress_state,
-    update_progress: progress_cb
+    update_progress: progress_cb,
+    failures: { string }
 ): number
     local badges_settings = manifest.experience.badges
         or error(`attempt to import badges without ensuring manifest`)
@@ -100,7 +116,7 @@ local function import_badges(
             progress.badges.current += 1
         else
             progress.badges.failed += 1
-            ui.warn(`badge import failed: {tostring(err)}`)
+            table.insert(failures, `badge import failed: {tostring(err)}`)
         end
 
         update_progress(progress)
@@ -115,7 +131,8 @@ local function import_passes(
     manifest: manifest_config_type,
     data: state_data,
     progress: progress_state,
-    update_progress: progress_cb
+    update_progress: progress_cb,
+    failures: { string }
 ): number
     local pass_settings = manifest.experience.passes
         or error(`attempt to import passes without ensuring manifest`)
@@ -193,7 +210,7 @@ local function import_passes(
             progress.passes.current += 1
         else
             progress.passes.failed += 1
-            ui.warn(`pass import failed: {tostring(err)}`)
+            table.insert(failures, `pass import failed: {tostring(err)}`)
         end
 
         update_progress(progress)
@@ -208,7 +225,8 @@ local function import_products(
     manifest: manifest_config_type,
     data: state_data,
     progress: progress_state,
-    update_progress: progress_cb
+    update_progress: progress_cb,
+    failures: { string }
 ): number
     local product_settings = manifest.experience.products
         or error(`attempt to import products without ensuring manifest`)
@@ -251,7 +269,7 @@ local function import_products(
             progress.products.current += 1
         else
             progress.products.failed += 1
-            ui.warn(`product import failed: {tostring(err)}`)
+            table.insert(failures, `product import failed: {tostring(err)}`)
         end
 
         update_progress(progress)
@@ -287,32 +305,60 @@ local function run(
 
     local progress = ui.make_progress('importing...')
     local update_progress = ui.start_progress(version)
+    local failures = {}
 
-    local badges_ok, badges_err = pcall(import_badges, api_key, experience_id, manifest, data, progress, update_progress)
+    local badges_ok, badges_err = pcall(
+        import_badges,
+        api_key,
+        experience_id,
+        manifest,
+        data,
+        progress,
+        update_progress,
+        failures
+    )
     if not badges_ok then
         progress.badges.failed += 1
-        ui.warn(`badge import failed: {tostring(badges_err)}`)
+        table.insert(failures, `badge import failed: {tostring(badges_err)}`)
         update_progress(progress)
     end
 
-    local passes_ok, passes_err = pcall(import_passes, cookie, experience_id, manifest, data, progress, update_progress)
+    local passes_ok, passes_err = pcall(
+        import_passes,
+        cookie,
+        experience_id,
+        manifest,
+        data,
+        progress,
+        update_progress,
+        failures
+    )
     if not passes_ok then
         progress.passes.failed += 1
-        ui.warn(`pass import failed: {tostring(passes_err)}`)
+        table.insert(failures, `pass import failed: {tostring(passes_err)}`)
         update_progress(progress)
     end
 
-    local products_ok, products_err = pcall(import_products, cookie, experience_id, manifest, data, progress, update_progress)
+    local products_ok, products_err = pcall(
+        import_products,
+        cookie,
+        experience_id,
+        manifest,
+        data,
+        progress,
+        update_progress,
+        failures
+    )
     if not products_ok then
         progress.products.failed += 1
-        ui.warn(`product import failed: {tostring(products_err)}`)
+        table.insert(failures, `product import failed: {tostring(products_err)}`)
         update_progress(progress)
     end
 
     state.save_manifest(manifest, output_file)
     state.save_state(data)
     state.clean_yaml_files(output_file)
-    ui.finish(true, 'import complete')
+    print_failure_report('import', failures)
 end
 
 return run
