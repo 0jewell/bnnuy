@@ -91,10 +91,53 @@ local function push_line(lines: { string }, level: number, text: string)
     table.insert(lines, string.rep(INDENT, level) .. text)
 end
 
+local function is_multiline_string(value: any): boolean
+    if type(value) ~= 'string' then
+        return false
+    end
+
+    return string.find(value, '\n', 1, true) ~= nil or string.find(value, '\r', 1, true) ~= nil
+end
+
+local function write_multiline_string(
+    lines: { string },
+    level: number,
+    value: string
+)
+    push_line(lines, level, '|')
+
+    local normalized = string.gsub(value, '\r\n', '\n')
+    normalized = string.gsub(normalized, '\r', '\n')
+
+    local cursor = 1
+
+    while true do
+        local next_break = string.find(normalized, '\n', cursor, true)
+
+        if not next_break then
+            push_line(lines, level + 1, string.sub(normalized, cursor))
+            break
+        end
+
+        push_line(lines, level + 1, string.sub(normalized, cursor, next_break - 1))
+        cursor = next_break + 1
+
+        if cursor > #normalized then
+            push_line(lines, level + 1, '')
+            break
+        end
+    end
+end
+
 local function write_value(lines: { string }, value: any, level: number)
     local value_type = type(value)
 
     if value_type ~= 'table' then
+        if is_multiline_string(value) then
+            write_multiline_string(lines, level, value)
+            return
+        end
+
         push_line(lines, level, scalar_to_yaml(value))
         return
     end
@@ -113,6 +156,11 @@ local function write_value(lines: { string }, value: any, level: number)
             if type(item) == 'table' and next(item) ~= nil then
                 push_line(lines, level, '-')
                 write_value(lines, item, level + 1)
+
+            elseif is_multiline_string(item) then
+                push_line(lines, level, '-')
+                write_multiline_string(lines, level + 1, item)
+
             else
                 local serialized = if type(item) == 'table' then '{}' else scalar_to_yaml(item)
                 push_line(lines, level, '- ' .. serialized)
@@ -137,6 +185,11 @@ local function write_value(lines: { string }, value: any, level: number)
         if current_is_table then
             push_line(lines, level, serialized_key .. ':')
             write_value(lines, item, level + 1)
+
+        elseif is_multiline_string(item) then
+            push_line(lines, level, serialized_key .. ':')
+            write_multiline_string(lines, level + 1, item)
+
         else
             local serialized = if type(item) == 'table' then '{}' else scalar_to_yaml(item)
             push_line(lines, level, serialized_key .. ': ' .. serialized)
