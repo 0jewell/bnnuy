@@ -1,3 +1,3 @@
 return table.freeze {
-    version = `v0.2.7`
+    version = `v0.2.8`
 }

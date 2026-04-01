@@ -20,6 +20,48 @@ local diff = require('@lib/sync/diff')
 local types = require('@lib/sync/types')
 
 export type thumbnail_response = { data: { { imageUrl: string? } } }
+local MAX_ACTIVITY_NAME_LEN = 28
+
+local function print_failure_report(
+    operation: string,
+    failures: { string }
+)
+    if #failures == 0 then
+        ui.finish(true, `{operation} complete`)
+        return
+    end
+
+    ui.finish(false, `{operation} complete with {#failures} failure(s)`)
+    for _, failure in failures do
+        ui.warn(failure)
+    end
+end
+
+local function truncate_activity_name(name: string): string
+    local len = utf8.len(name)
+    if not len or len <= MAX_ACTIVITY_NAME_LEN then
+        return name
+    end
+
+    local cut_index = utf8.offset(name, MAX_ACTIVITY_NAME_LEN + 1)
+    if cut_index then
+        return string.sub(name, 1, cut_index - 1) .. '...'
+    end
+
+    return string.sub(name, 1, MAX_ACTIVITY_NAME_LEN) .. '...'
+end
+
+local function set_activity_label(
+    progress: progress_state,
+    update_progress: progress_cb,
+    action: string,
+    asset_type: string,
+    key: string
+)
+    local safe_key = truncate_activity_name(key)
+    progress.label = `{action} {asset_type} '{safe_key}'...`
+    update_progress(progress)
+end
 
 local function icon_name_from_item_name(name: string): string
     local normalized = string.lower(name)
@@ -323,6 +365,8 @@ local function validate_product_config(key: string, config: types.product_settin
 end
 
 return table.freeze {
+    print_failure_report = print_failure_report,
+    set_activity_label = set_activity_label,
     ensure_icon_file = ensure_icon_file,
     unique_key = unique_key,
     contains_id = contains_id,

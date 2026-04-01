@@ -71,16 +71,18 @@ local function create_developer_product(
     price: number,
     description: string
 ): create_developer_product_response
+    local body = form()
+        .text('name', name)
+        .text('description', description)
+        .text('isForSale', 'true')
+        .text('price', tostring(price))
+
     local response_body = user.request(
         cookie,
         `developer-products/v2/universes/{experience_id}/developer-products`,
         'POST',
-        'application/json',
-        serde.encode('json', {
-            name = name,
-            description = description,
-            priceInRobux = price,
-        })
+        `multipart/form-data; boundary={body.boundary}`,
+        body.multipart()
     )
 
     return serde.decode('json', response_body)
@@ -149,16 +151,18 @@ local function update_developer_product(
     price: number,
     description: string
 ): ()
+    local body = form()
+        .text('name', name)
+        .text('description', description)
+        .text('isForSale', 'true')
+        .text('price', tostring(price))
+
     user.request(
         cookie,
         `developer-products/v2/universes/{experience_id}/developer-products/{product_id}`,
         'PATCH',
-        'application/json',
-        serde.encode('json', {
-            name = name,
-            priceInRobux = price,
-            description = description,
-        })
+        `multipart/form-data; boundary={body.boundary}`,
+        body.multipart()
     )
 end
 

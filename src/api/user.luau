@@ -58,5 +58,5 @@ end
 
 return table.freeze {
     request = request,
-    get_cookie = get_cookie,
+    get_cookie = get_cookie
 }

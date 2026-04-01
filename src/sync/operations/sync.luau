@@ -21,49 +21,6 @@ type badge_settings_type = types.badge_settings
 type pass_settings_type = types.gamepass_settings
 type product_settings_type = types.product_settings
 
-local function print_failure_report(
-    operation: string,
-    failures: { string }
-)
-    if #failures == 0 then
-        ui.finish(true, `{operation} complete`)
-        return
-    end
-
-    ui.finish(false, `{operation} complete with {#failures} failure(s)`)
-    for _, failure in failures do
-        ui.warn(failure)
-    end
-end
-
-local MAX_ACTIVITY_NAME_LEN = 28
-
-local function truncate_activity_name(name: string): string
-    local len = utf8.len(name)
-    if not len or len <= MAX_ACTIVITY_NAME_LEN then
-        return name
-    end
-
-    local cut_index = utf8.offset(name, MAX_ACTIVITY_NAME_LEN + 1)
-    if cut_index then
-        return string.sub(name, 1, cut_index - 1) .. '...'
-    end
-
-    return string.sub(name, 1, MAX_ACTIVITY_NAME_LEN) .. '...'
-end
-
-local function set_activity_label(
-    progress: progress_state,
-    update_progress: progress_cb,
-    action: string,
-    asset_type: string,
-    key: string
-)
-    local safe_key = truncate_activity_name(key)
-    progress.label = `{action} {asset_type} '{safe_key}'...`
-    update_progress(progress)
-end
-
 local function sync_badges(
     api_key: api_key,
     experience_id: number,
@@ -100,7 +57,7 @@ local function sync_badges(
                 if changes or icon_changed then
                     local needs_update = changes and (changes.name or changes.description or changes.enabled)
                     if needs_update then
-                        set_activity_label(progress, update_progress, 'updating', 'badge', key)
+                        common.set_activity_label(progress, update_progress, 'updating', 'badge', key)
                         badges.update_badge(
                             api_key,
                             stored.id,
@@ -111,7 +68,7 @@ local function sync_badges(
                     end
 
                     if icon_changed then
-                        set_activity_label(progress, update_progress, 'updating icon for', 'badge', key)
+                        common.set_activity_label(progress, update_progress, 'updating icon for', 'badge', key)
                         badges.update_badge_icon(api_key, stored.id, config.icon)
                     end
 
@@ -119,7 +76,7 @@ local function sync_badges(
                     badges_state[key].icon_hash = icon_hash
                 end
             else
-                set_activity_label(progress, update_progress, 'creating', 'badge', key)
+                common.set_activity_label(progress, update_progress, 'creating', 'badge', key)
                 local response = badges.create_badge(
                     api_key,
                     experience_id,
@@ -202,7 +159,6 @@ local function sync_passes(
                     config.forSale = stored.config.forSale
                 end
             end
-
             common.validate_pass_config(key, config)
 
             local icon_hash = state.hash_file(config.icon)
@@ -228,7 +184,7 @@ local function sync_passes(
                 local icon_changed = stored.icon_hash ~= icon_hash
 
                 if changes or icon_changed then
-                    set_activity_label(progress, update_progress, 'updating', 'pass', key)
+                    common.set_activity_label(progress, update_progress, 'updating', 'pass', key)
                     passes.update_game_pass(
                         cookie,
                         experience_id,
@@ -244,7 +200,7 @@ local function sync_passes(
                     passes_state[key].icon_hash = icon_hash
                 end
             else
-                set_activity_label(progress, update_progress, 'creating', 'pass', key)
+                common.set_activity_label(progress, update_progress, 'creating', 'pass', key)
                 local response = passes.create_game_pass(
                     cookie,
                     experience_id,
@@ -259,7 +215,7 @@ local function sync_passes(
                     icon_hash = icon_hash,
                 }
 
-                set_activity_label(progress, update_progress, 'updating', 'pass', key)
+                common.set_activity_label(progress, update_progress, 'updating', 'pass', key)
                 passes.update_game_pass(
                     cookie,
                     experience_id,
@@ -322,21 +278,17 @@ local function sync_products(
                 local icon_changed = stored.icon_hash ~= icon_hash
 
                 if changes or icon_changed then
-                    local needs_update = changes and (changes.name or changes.description or changes.price)
-                    if needs_update then
-                        set_activity_label(progress, update_progress, 'updating', 'product', key)
-                        products.update_developer_product(
-                            cookie,
-                            experience_id,
-                            stored.id,
-                            config.name,
-                            config.price,
-                            config.description
-                        )
-                    end
+					products.update_developer_product(
+						cookie,
+						experience_id,
+						stored.id,
+						config.name,
+						config.price,
+						config.description
+					)
 
                     if icon_changed then
-                        set_activity_label(progress, update_progress, 'updating icon for', 'product', key)
+                        common.set_activity_label(progress, update_progress, 'updating icon for', 'product', key)
                         products.create_developer_product_icon(cookie, stored.id, config.icon)
                     end
 
@@ -345,7 +297,7 @@ local function sync_products(
                 end
             else
                 assert(config.price ~= nil, `invalid manifest field 'experience.products.{key}.price': expected number`)
-                set_activity_label(progress, update_progress, 'creating', 'product', key)
+                common.set_activity_label(progress, update_progress, 'creating', 'product', key)
                 local response = products.create_developer_product(
                     cookie,
                     experience_id,
@@ -361,7 +313,7 @@ local function sync_products(
                 }
 
                 if config.icon then
-                    set_activity_label(progress, update_progress, 'updating icon for', 'product', key)
+                    common.set_activity_label(progress, update_progress, 'updating icon for', 'product', key)
                     products.create_developer_product_icon(cookie, response.productId, config.icon)
                 end
             end
@@ -370,6 +322,7 @@ local function sync_products(
         if success then
             progress.products.current += 1
         else
+            print(err)
             progress.products.failed += 1
             table.insert(failures, `product '{key}': {tostring(err)}`)
         end
@@ -399,7 +352,7 @@ local function run(api_key: api_key, cookie: cookie, version: string)
 
     state.save_state(data)
     state.clean_state_file()
-    print_failure_report('upload', failures)
+    common.print_failure_report('upload', failures)
 end
 
 return run

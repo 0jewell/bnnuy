@@ -21,49 +21,6 @@ type badge_settings_type = types.badge_settings
 type pass_settings_type = types.gamepass_settings
 type product_settings_type = types.product_settings
 
-local function print_failure_report(
-    operation: string,
-    failures: { string }
-)
-    if #failures == 0 then
-        ui.finish(true, `{operation} complete`)
-        return
-    end
-
-    ui.finish(false, `{operation} complete with {#failures} failure(s)`)
-    for _, failure in failures do
-        ui.warn(failure)
-    end
-end
-
-local MAX_ACTIVITY_NAME_LEN = 28
-
-local function truncate_activity_name(name: string): string
-    local len = utf8.len(name)
-    if not len or len <= MAX_ACTIVITY_NAME_LEN then
-        return name
-    end
-
-    local cut_index = utf8.offset(name, MAX_ACTIVITY_NAME_LEN + 1)
-    if cut_index then
-        return string.sub(name, 1, cut_index - 1) .. '...'
-    end
-
-    return string.sub(name, 1, MAX_ACTIVITY_NAME_LEN) .. '...'
-end
-
-local function set_activity_label(
-    progress: progress_state,
-    update_progress: progress_cb,
-    action: string,
-    asset_type: string,
-    key: string
-)
-    local safe_key = truncate_activity_name(key)
-    progress.label = `{action} {asset_type} '{safe_key}'...`
-    update_progress(progress)
-end
-
 local function import_badges(
     api_key: api_key,
     experience_id: number,
@@ -91,7 +48,7 @@ local function import_badges(
             end
 
             local key = common.unique_key(badge.name, badges_settings, badges_state)
-            set_activity_label(progress, update_progress, 'importing', 'badge', key)
+            common.set_activity_label(progress, update_progress, 'importing', 'badge', key)
             local icon = common.ensure_icon_file('badge', badge.id, badge.name, badge.iconImageId)
 
             local config: badge_settings_type = {
@@ -186,7 +143,7 @@ local function import_passes(
             end
 
             local key = common.unique_key(pass.name, pass_settings, passes_state)
-            set_activity_label(progress, update_progress, 'importing', 'pass', key)
+            common.set_activity_label(progress, update_progress, 'importing', 'pass', key)
             local icon = common.ensure_icon_file('pass', pass_id, pass.name, pass.iconAssetId)
             local config: pass_settings_type = {
                 name = pass.name,
@@ -246,7 +203,7 @@ local function import_products(
             end
 
             local key = common.unique_key(product.name, product_settings, products_state)
-            set_activity_label(progress, update_progress, 'importing', 'product', key)
+            common.set_activity_label(progress, update_progress, 'importing', 'product', key)
             local icon = common.ensure_icon_file('product', product.productId, product.name, product.iconImageAssetId)
             local config: product_settings_type = {
                 name = product.name,
@@ -358,7 +315,7 @@ local function run(
     state.save_manifest(manifest, output_file)
     state.save_state(data)
     state.clean_yaml_files(output_file)
-    print_failure_report('import', failures)
+    common.print_failure_report('import', failures)
 end
 
 return run
