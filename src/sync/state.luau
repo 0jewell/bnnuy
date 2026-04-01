@@ -104,6 +104,10 @@ local function clean_yaml_files(extra_manifest_path: string?)
     yaml.clean_files(yaml_files)
 end
 
+local function clean_state_file()
+    yaml.clean_file(STATE_FILE)
+end
+
 local function create_initial_state(experience_id: number): state
     return {
         experience_id = experience_id,
@@ -120,5 +124,6 @@ return table.freeze {
     make_manifest = make_base_manifest,
     save_manifest = save_manifest,
     create_initial_state = create_initial_state,
-    clean_yaml_files = clean_yaml_files
+    clean_yaml_files = clean_yaml_files,
+    clean_state_file = clean_state_file
 }

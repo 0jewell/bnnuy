@@ -398,7 +398,7 @@ local function run(api_key: api_key, cookie: cookie, version: string)
     end
 
     state.save_state(data)
-    state.clean_yaml_files()
+    state.clean_state_file()
     print_failure_report('upload', failures)
 end
 
