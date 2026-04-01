@@ -152,14 +152,17 @@ local function update_game_pass(
     name: string,
     description: string,
     price: number?,
-    icon_file_path: string?
+    icon_file_path: string?,
+    for_sale: boolean?
 ): get_game_pass_response
+    local is_for_sale = if for_sale ~= nil then for_sale else (price ~= nil)
+
     local body = form()
         .text('name', name)
         .text('description', description)
-        .text('isForSale', if price then 'true' else 'false')
+        .text('isForSale', if is_for_sale then 'true' else 'false')
 
-    if price then
+    if is_for_sale and price then
         body.text('price', tostring(price))
     end
 

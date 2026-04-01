@@ -125,8 +125,30 @@ export type progress_state = {
 
 local progress_lines = 0
 
+local function strip_trailing_dots(text: string): string
+    return string.gsub(text, '%s*%.%.?%.?$', '')
+end
+
+local function animated_label(text: string): string
+    local base = strip_trailing_dots(text)
+    return base .. '...'
+end
+
+local function make_progress(label: string): progress_state
+    return {
+        badges = { current = 0, total = 0, failed = 0 },
+        passes = { current = 0, total = 0, failed = 0 },
+        products = { current = 0, total = 0, failed = 0 },
+        label = label,
+        done = false,
+    }
+end
+
 local function render_progress(version: string, s: progress_state)
-    local function track(name: string, t: { current: number, total: number, failed: number }): string
+    local function track(
+        name: string,
+        t: { current: number, total: number, failed: number }
+    ): string
         local bar = render_bar(t.current, t.total)
         local label = pad_right(c.muted .. name, 14)
         local count = c.muted .. t.current .. '/' .. t.total
@@ -138,7 +160,7 @@ local function render_progress(version: string, s: progress_state)
         '',
         c.title .. stdio.style('bold') .. 'bnnuy' .. c.muted .. '  ' .. version .. stdio.style('reset'),
         '',
-        c.text .. s.label,
+        c.text .. animated_label(s.label),
         '',
         track('badges', s.badges),
         track('passes', s.passes),
@@ -192,6 +214,7 @@ return table.freeze {
     error = error,
     warn = warn,
     start_progress = start_progress,
+    make_progress = make_progress,
     help = help,
     welcome = welcome
 }

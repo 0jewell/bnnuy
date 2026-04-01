@@ -18,6 +18,7 @@ export type gamepass_settings = {
     name: string,
     description: string,
     icon: string,
+    forSale: boolean?,
     price: number?,
 }
 
@@ -26,7 +27,7 @@ export type product_settings = {
     description: string,
     icon: string,
     price: number,
-    metadata: { [string]: any }?,
+    [string]: any,
 }
 
 return nil
