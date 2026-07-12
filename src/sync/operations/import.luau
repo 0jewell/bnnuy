@@ -198,6 +198,11 @@ local function import_products(
 
     for _, product in remote_products do
         local success, err: any = pcall(function()
+            local product_price: number? = nil
+            if product.priceInformation then
+                product_price = product.priceInformation.defaultPriceInRobux
+            end
+
             if common.contains_id(products_state, product.productId) then
                 return
             end
@@ -209,7 +214,8 @@ local function import_products(
                 name = product.name,
                 description = product.description,
                 icon = icon,
-                price = product.priceInRobux,
+                price = product_price
+                    or error(`remote product '{product.name}' ({product.productId}) is missing defaultPriceInRobux`),
             }
 
             common.validate_product_config(key, config)

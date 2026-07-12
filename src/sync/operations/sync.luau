@@ -20,6 +20,7 @@ type manifest_config_type = types.config
 type badge_settings_type = types.badge_settings
 type pass_settings_type = types.gamepass_settings
 type product_settings_type = types.product_settings
+type product_response_item = products.list_developer_product_response_item
 
 local function sync_badges(
     api_key: api_key,
@@ -258,15 +259,74 @@ local function sync_products(
     update_progress(progress)
 
     local products_state = common.get_or_create_products_state(data)
+    local remote_products_by_name: { [string]: product_response_item }? = nil
+    local processed_product_ids: { [number]: string } = {}
+
+    local function ensure_remote_products_index(): { [string]: product_response_item }
+        if remote_products_by_name then
+            return remote_products_by_name
+        end
+
+        local new_index = {}
+        for _, remote_product in products.get_all_developer_products(cookie, experience_id) do
+            if not new_index[remote_product.name] then
+                new_index[remote_product.name] = remote_product
+            end
+        end
+
+        remote_products_by_name = new_index
+        return new_index
+    end
+
+    local function migrate_product_state(
+        old_key: string,
+        new_key: string
+    ): any
+        local stored = products_state[old_key]
+        products_state[new_key] = stored
+        products_state[old_key] = nil
+        return stored
+    end
+
+    local function resolve_stored_product(
+        key: string,
+        config: product_settings_type
+    ): any
+        local stored = products_state[key]
+        if stored then
+            return stored
+        end
+
+        local remote_product = ensure_remote_products_index()[config.name]
+        if remote_product then
+            for stored_key, candidate in products_state do
+                if stored_key ~= key and candidate.id == remote_product.productId then
+                    return migrate_product_state(stored_key, key)
+                end
+            end
+        end
+
+        for stored_key, candidate in products_state do
+            if stored_key ~= key and candidate.config and candidate.config.name == config.name then
+                local migrated = migrate_product_state(stored_key, key)
+                if remote_product then
+                    migrated.id = remote_product.productId
+                end
+                return migrated
+            end
+        end
+
+        return nil
+    end
 
     for _, item in items do
         local key = item.key
         local config = item.config
 
-        local success, err = pcall(function()
+        local success, err: any = pcall(function()
             common.validate_product_config(key, config)
 
-            local stored = products_state[key]
+            local stored = resolve_stored_product(key, config)
             if stored and config.price == nil then
                 config.price = stored.config.price
             end
@@ -274,23 +334,27 @@ local function sync_products(
             local icon_hash = state.hash_file(config.icon)
 
             if stored then
+                if processed_product_ids[stored.id] then
+                    local original_key = processed_product_ids[stored.id]
+                    ui.warn(`duplicate product mapping: '{key}' and '{original_key}' point to the same id ({stored.id}); skipping '{key}'`)
+                    return
+                end
+                processed_product_ids[stored.id] = key
+
                 local changes = diff.from(stored.config, config)
                 local icon_changed = stored.icon_hash ~= icon_hash
 
                 if changes or icon_changed then
-					products.update_developer_product(
-						cookie,
-						experience_id,
-						stored.id,
-						config.name,
-						config.price,
-						config.description
-					)
-
-                    if icon_changed then
-                        common.set_activity_label(progress, update_progress, 'updating icon for', 'product', key)
-                        products.create_developer_product_icon(cookie, stored.id, config.icon)
-                    end
+                    common.set_activity_label(progress, update_progress, 'updating', 'product', key)
+                    products.update_developer_product(
+                        cookie,
+                        experience_id,
+                        stored.id,
+                        config.name,
+                        config.price,
+                        config.description,
+                        if icon_changed then config.icon else nil
+                    )
 
                     products_state[key].config = diff.clone_snapshot(config)
                     products_state[key].icon_hash = icon_hash
@@ -303,7 +367,8 @@ local function sync_products(
                     experience_id,
                     config.name,
                     config.price,
-                    config.description
+                    config.description,
+                    config.icon
                 )
 
                 products_state[key] = {
@@ -311,18 +376,13 @@ local function sync_products(
                     config = diff.clone_snapshot(config),
                     icon_hash = icon_hash,
                 }
-
-                if config.icon then
-                    common.set_activity_label(progress, update_progress, 'updating icon for', 'product', key)
-                    products.create_developer_product_icon(cookie, response.productId, config.icon)
-                end
+                processed_product_ids[response.productId] = key
             end
         end)
 
         if success then
             progress.products.current += 1
         else
-            print(err)
             progress.products.failed += 1
             table.insert(failures, `product '{key}': {tostring(err)}`)
         end
